@@ -144,14 +144,26 @@ const ENEMY_DEFS = {
 };
 
 const WAVES = [
-  { enemies: Array(5).fill('caterpillar'), interval: 1.5 },
-  { enemies: Array(8).fill('caterpillar'), interval: 1.2 },
-  { enemies: [...Array(5).fill('caterpillar'), ...Array(3).fill('ant')], interval: 1.0 },
-  { enemies: [...Array(5).fill('ant'), ...Array(2).fill('beetle')], interval: 1.2 },
-  { enemies: [...Array(6).fill('caterpillar'), ...Array(3).fill('beetle')], interval: 1.0 },
-  { enemies: [...Array(8).fill('ant'), ...Array(2).fill('beetle')], interval: 0.8 },
-  { enemies: [...Array(5).fill('caterpillar'), ...Array(5).fill('ant'), ...Array(3).fill('beetle')], interval: 0.8 },
-  { enemies: [...Array(2).fill('beetle'), ...Array(4).fill('ant'), 'bugking'], interval: 1.0 }
+  // W1: 小青虫 ×6, 间隔 1.5s
+  { enemies: Array(6).fill('caterpillar'), interval: 1.5 },
+  // W2: 小青虫 ×8 + 红蚂蚁 ×2, 间隔 1.2s
+  { enemies: [...Array(8).fill('caterpillar'), ...Array(2).fill('ant')], interval: 1.2 },
+  // W3: 红蚂蚁 ×8（突击波）, 间隔 0.8s
+  { enemies: Array(8).fill('ant'), interval: 0.8 },
+  // W4: 小青虫 ×5 + 铁甲虫 ×3, 间隔 1.2s
+  { enemies: [...Array(5).fill('caterpillar'), ...Array(3).fill('beetle')], interval: 1.2 },
+  // W5: 红蚂蚁 ×6 + 铁甲虫 ×2, 间隔 1.0s
+  { enemies: [...Array(6).fill('ant'), ...Array(2).fill('beetle')], interval: 1.0 },
+  // W6: 小青虫 ×8 + 红蚂蚁 ×5 + 铁甲虫 ×2, 间隔 0.8s
+  { enemies: [...Array(8).fill('caterpillar'), ...Array(5).fill('ant'), ...Array(2).fill('beetle')], interval: 0.8 },
+  // W7: 红蚂蚁 ×10 + 铁甲虫 ×3（极速压力波）, 间隔 0.4s
+  { enemies: [...Array(10).fill('ant'), ...Array(3).fill('beetle')], interval: 0.4 },
+  // W8: 铁甲虫 ×6 + 红蚂蚁 ×4, 间隔 0.8s
+  { enemies: [...Array(6).fill('beetle'), ...Array(4).fill('ant')], interval: 0.8 },
+  // W9: 小青虫 ×10 + 红蚂蚁 ×8 + 铁甲虫 ×4（全怪混合）, 间隔 0.6s
+  { enemies: [...Array(10).fill('caterpillar'), ...Array(8).fill('ant'), ...Array(4).fill('beetle')], interval: 0.6 },
+  // W10: 铁甲虫 ×3 + 红蚂蚁 ×6 + bugking ×1（Boss 最后出场）, 间隔 1.0s
+  { enemies: [...Array(3).fill('beetle'), ...Array(6).fill('ant'), 'bugking'], interval: 1.0 }
 ];
 
 // ========== OBSTACLE DEFS ==========
@@ -309,6 +321,8 @@ class Enemy {
     this.slowTimer = 0;
     this.slowAmount = 0;
     this.hitFlash = 0;
+    this.walkPhase = 0;
+    this.isMoving = false;
     this.summonCount = 0;
     this.maxSummons = type === 'bugking' ? 3 : 0;
     this.lastSummonThreshold = 1.0;
@@ -329,6 +343,7 @@ class Enemy {
     }
     // Move along path
     if (this.pathIdx >= PATH.length - 1) {
+      this.isMoving = false;
       lives -= this.lifeCost;
       this.alive = false;
       return;
@@ -342,10 +357,13 @@ class Enemy {
     if (d <= step) {
       this.x = tx; this.y = ty;
       this.pathIdx++;
+      this.isMoving = true;
     } else {
       this.x += (dx / d) * step;
       this.y += (dy / d) * step;
+      this.isMoving = true;
     }
+    this.walkPhase += this.speed * dt * 8;
     // Bugking summon
     if (this.maxSummons > 0 && this.summonCount < this.maxSummons) {
       const hpRatio = this.hp / this.maxHp;
@@ -404,23 +422,30 @@ class Enemy {
   draw() {
     if (!this.alive) return;
     const size = this.type === 'bugking' ? 40 : 32;
+    const bounce = Math.sin(this.walkPhase) * 3;
+    const scaleX = this.isMoving ? 1.1 : 1.0;
+    const scaleY = this.isMoving ? 0.9 : 1.0;
     // Beetle rage red filter
     if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
       CTX.save();
       CTX.globalCompositeOperation = 'source-over';
     }
-    if (!drawImg(this.key, this.x - size/2, this.y - size/2, size, size)) {
+    CTX.save();
+    CTX.translate(this.x, this.y + bounce);
+    CTX.scale(scaleX, scaleY);
+    if (!drawImg(this.key, -size/2, -size/2, size, size)) {
       // Fallback
       CTX.fillStyle = this.type === 'caterpillar' ? '#4CAF50' : this.type === 'ant' ? '#f44336' : this.type === 'beetle' ? '#607D8B' : '#9C27B0';
-      CTX.beginPath(); CTX.arc(this.x, this.y, size/2.5, 0, Math.PI*2); CTX.fill();
+      CTX.beginPath(); CTX.arc(0, 0, size/2.5, 0, Math.PI*2); CTX.fill();
       CTX.fillStyle = '#fff'; CTX.font = '10px Arial'; CTX.textAlign = 'center';
-      CTX.fillText(this.type[0].toUpperCase(), this.x, this.y + 3);
+      CTX.fillText(this.type[0].toUpperCase(), 0, 3);
     }
+    CTX.restore();
     // Beetle rage red overlay
     if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
       CTX.globalAlpha = 0.4;
       CTX.fillStyle = '#ff0000';
-      CTX.beginPath(); CTX.arc(this.x, this.y, size/2, 0, Math.PI*2); CTX.fill();
+      CTX.beginPath(); CTX.arc(this.x, this.y + bounce, size/2, 0, Math.PI*2); CTX.fill();
       CTX.restore();
     }
     // Hit flash white overlay
@@ -428,12 +453,12 @@ class Enemy {
       CTX.save();
       CTX.globalAlpha = 0.6;
       CTX.fillStyle = '#fff';
-      CTX.beginPath(); CTX.arc(this.x, this.y, size/2, 0, Math.PI*2); CTX.fill();
+      CTX.beginPath(); CTX.arc(this.x, this.y + bounce, size/2, 0, Math.PI*2); CTX.fill();
       CTX.restore();
     }
     // HP bar - capsule shape with gradient
     const barW = size * 0.8, barH = 4;
-    const barX = this.x - barW / 2, barY = this.y - size / 2 - 6;
+    const barX = this.x - barW / 2, barY = this.y - size / 2 - 6 + bounce;
     const hpRatio = this.hp / this.maxHp;
     CTX.fillStyle = '#333';
     CTX.beginPath();
@@ -452,7 +477,7 @@ class Enemy {
       CTX.fillStyle = 'rgba(100, 180, 255, 0.6)';
       for (let i = 0; i < 3; i++) {
         const px = this.x + (Math.random()-0.5)*size*0.6;
-        const py = this.y + (Math.random()-0.5)*size*0.6;
+        const py = this.y + bounce + (Math.random()-0.5)*size*0.6;
         CTX.beginPath(); CTX.arc(px, py, 2, 0, Math.PI*2); CTX.fill();
       }
     }
@@ -479,6 +504,7 @@ class Tower {
     this.totalCost = def.cost;
     this.angle = 0;
     this.placeAnim = 0.3;
+    this.recoilTimer = 0;
     this.targetMode = 'first'; // 'first', 'strongest', 'weakest', 'last'
   }
   upgrade() {
@@ -508,6 +534,7 @@ class Tower {
   }
   update(dt) {
     if (this.placeAnim > 0) this.placeAnim = Math.max(0, this.placeAnim - dt);
+    if (this.recoilTimer > 0) this.recoilTimer = Math.max(0, this.recoilTimer - dt);
     if (this.mine) {
       // Check if enemy is on this cell
       for (const e of enemies) {
@@ -561,6 +588,7 @@ class Tower {
     
     if (target) {
       this.cooldown = this.rate;
+      this.recoilTimer = 0.2;
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
       const def = TOWER_DEFS[this.type];
       bullets.push(new Bullet(this.x, this.y, target, this.dmg, this.aoe, this.slow, this.slowDur, def.bulletKey));
@@ -581,6 +609,7 @@ class Tower {
       }
       if (obsTarget) {
         this.cooldown = this.rate;
+        this.recoilTimer = 0.2;
         this.angle = Math.atan2(obsTarget.y - this.y, obsTarget.x - this.x);
         const def = TOWER_DEFS[this.type];
         bullets.push(new Bullet(this.x, this.y, obsTarget, this.dmg, this.aoe, this.slow, this.slowDur, def.bulletKey));
@@ -593,9 +622,16 @@ class Tower {
     if (this.placeAnim > 0) {
       const t = 1 - this.placeAnim / 0.3;
       scale = t < 0.5 ? 1.2 * (t / 0.5) : 1.2 - 0.2 * ((t - 0.5) / 0.5);
+    } else if (this.recoilTimer > 0) {
+      // recoilTimer counts down from 0.2 to 0: peak at 0.2, recover to 1.0
+      const t = this.recoilTimer / 0.2; // 1 at fire moment, 0 when done
+      scale = 1.0 + 0.15 * t;
     }
     CTX.save();
     CTX.translate(this.x, this.y);
+    if (!this.mine) {
+      CTX.rotate(this.angle);
+    }
     CTX.scale(scale, scale);
     if (!drawImg(imgKey, -20, -20, 40, 40)) {
       const colors = ['#FFC107', '#03A9F4', '#FF5722', '#795548'];
@@ -773,7 +809,11 @@ function handleClick(p) {
   // UI top bar - next wave button
   if (y < UI_TOP) {
     if (x >= W - 120 && x <= W - 10 && !waveActive && wave < WAVES.length) {
-      if (prepTimer > 0) { gold += 14; floatTexts.push({ text: '+14 跳过', x: W - 65, y: 20, timer: 1.0, color: '#FFD700' }); }
+      if (prepTimer > 0) {
+        const bonus = Math.floor(prepTimer) * 3;
+        gold += bonus;
+        floatTexts.push({ text: '+' + bonus + ' 跳过', x: W - 65, y: 20, timer: 1.0, color: '#FFD700', startX: W - 65, startY: 20, elapsed: 0 });
+      }
       startWave();
     }
     selectedPlaced = null;
@@ -941,10 +981,15 @@ function drawMap() {
 
   // Carrot at end
   const cp = cellToPixel(14, 11);
-  if (!drawImg('carrot', cp.x - 20, cp.y - 20, 40, 40)) {
+  const sway = Math.sin(menuAnimTime * 2) * 3;
+  CTX.save();
+  CTX.translate(cp.x + sway, cp.y);
+  CTX.rotate(sway * 0.03);
+  if (!drawImg('carrot', -20, -20, 40, 40)) {
     CTX.fillStyle = '#FF9800'; CTX.font = 'bold 12px Arial'; CTX.textAlign = 'center';
-    CTX.fillText('🥕', cp.x, cp.y + 4);
+    CTX.fillText('🥕', 0, 4);
   }
+  CTX.restore();
 
   // Placement preview
   if (selectedTower >= 0 && mouseGY >= 0 && mouseGY < ROWS && mouseGX >= 0 && mouseGX < COLS) {
