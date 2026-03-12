@@ -132,52 +132,42 @@ let totalKills = 0, carrotFlash = 0, carrotShake = 0;
 // ========== AUDIO SYSTEM ==========
 let audioCtx = null;
 function initAudio() {
-  if (audioCtx) return;
-  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
 function playSound(type) {
   if (!audioCtx) return;
-  try {
-    if (type === 'place') {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.connect(g); g.connect(audioCtx.destination);
-      o.frequency.setValueAtTime(300, audioCtx.currentTime);
-      g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-      o.start(); o.stop(audioCtx.currentTime + 0.1);
-    } else if (type === 'shoot') {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.connect(g); g.connect(audioCtx.destination);
-      o.frequency.setValueAtTime(800, audioCtx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.05);
-      g.gain.setValueAtTime(0.15, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-      o.start(); o.stop(audioCtx.currentTime + 0.05);
-    } else if (type === 'kill') {
-      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.15, audioCtx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
-      const src = audioCtx.createBufferSource(), g = audioCtx.createGain();
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = 'lowpass'; filter.frequency.value = 200;
-      src.buffer = buf; src.connect(filter); filter.connect(g); g.connect(audioCtx.destination);
-      g.gain.setValueAtTime(0.4, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-      src.start(); src.stop(audioCtx.currentTime + 0.15);
-    } else if (type === 'wave') {
-      const notes = [523, 659, 784];
-      notes.forEach((freq, i) => {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.connect(g); g.connect(audioCtx.destination);
-        o.frequency.value = freq;
-        const t = audioCtx.currentTime + i * 0.12;
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.25, t + 0.04);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        o.start(t); o.stop(t + 0.25);
-      });
-    }
-  } catch(e) {}
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  if (type === 'place') {
+    osc.frequency.setValueAtTime(400, now);
+    osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+    osc.start(now); osc.stop(now + 0.12);
+  } else if (type === 'shoot') {
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(400, now + 0.06);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+    osc.start(now); osc.stop(now + 0.06);
+  } else if (type === 'kill') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc.start(now); osc.stop(now + 0.2);
+  } else if (type === 'wave') {
+    osc.frequency.setValueAtTime(523, now);
+    osc.frequency.setValueAtTime(659, now + 0.1);
+    osc.frequency.setValueAtTime(784, now + 0.2);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+    osc.start(now); osc.stop(now + 0.35);
+  }
 }
 
 const TOWER_DEFS = [
@@ -507,11 +497,7 @@ class Enemy {
     CTX.translate(this.x, this.y + bounce);
     CTX.scale(scaleX, scaleY);
     if (!drawImg(this.key, -size/2, -size/2, size, size)) {
-      // Fallback
-      CTX.fillStyle = this.type === 'caterpillar' ? '#4CAF50' : this.type === 'ant' ? '#f44336' : this.type === 'beetle' ? '#607D8B' : '#9C27B0';
-      CTX.beginPath(); CTX.arc(0, 0, size/2.5, 0, Math.PI*2); CTX.fill();
-      CTX.fillStyle = '#fff'; CTX.font = '10px Arial'; CTX.textAlign = 'center';
-      CTX.fillText(this.type[0].toUpperCase(), 0, 3);
+      drawEnemyFallback(CTX, this.type, size, menuAnimTime);
     }
     CTX.restore();
     // Beetle rage red overlay
@@ -698,8 +684,7 @@ class Tower {
       const t = 1 - this.placeAnim / 0.3;
       scale = t < 0.5 ? 1.2 * (t / 0.5) : 1.2 - 0.2 * ((t - 0.5) / 0.5);
     } else if (this.recoilTimer > 0) {
-      // recoilTimer counts down from 0.2 to 0: peak at 0.2, recover to 1.0
-      const t = this.recoilTimer / 0.2; // 1 at fire moment, 0 when done
+      const t = this.recoilTimer / 0.2;
       scale = 1.0 + 0.15 * t;
     }
     CTX.save();
@@ -709,11 +694,7 @@ class Tower {
     }
     CTX.scale(scale, scale);
     if (!drawImg(imgKey, -20, -20, 40, 40)) {
-      const colors = ['#FFC107', '#03A9F4', '#FF5722', '#795548'];
-      CTX.fillStyle = colors[this.type];
-      CTX.fillRect(-16, -16, 32, 32);
-      CTX.fillStyle = '#fff'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
-      CTX.fillText(TOWER_DEFS[this.type].name[0], 0, 4);
+      drawTowerFallback(CTX, this.type, this.level, menuAnimTime);
     }
     if (this.level === 2) {
       CTX.fillStyle = '#FFD700'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
@@ -978,6 +959,292 @@ function handleClick(p) {
   selectedTower = -1;
 }
 
+// ========== TOWER FALLBACK DRAWING ==========
+function drawTowerFallback(ctx, type, level, animTime) {
+  ctx.save();
+  if (type === 0) {
+    // 玉米射手: yellow cylinder body + green hat + eyes
+    // Body: yellow rounded rect
+    ctx.fillStyle = level === 2 ? '#FFD700' : '#FFC107';
+    ctx.beginPath(); ctx.roundRect(-10, -14, 20, 22, 5); ctx.fill();
+    // Body highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.roundRect(-8, -12, 8, 10, 3); ctx.fill();
+    // Green hat
+    ctx.fillStyle = '#4CAF50';
+    ctx.beginPath();
+    ctx.moveTo(-10, -14); ctx.lineTo(0, -22); ctx.lineTo(10, -14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#388E3C';
+    ctx.fillRect(-10, -16, 20, 4);
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-4, -6, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -6, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(-3, -6, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -6, 2, 0, Math.PI*2); ctx.fill();
+    // Smile
+    ctx.strokeStyle = '#7B5E0A'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 2, 5, 0.2, Math.PI - 0.2); ctx.stroke();
+  } else if (type === 1) {
+    // 冰豌豆: blue sphere + highlight + ice particles
+    const grad = ctx.createRadialGradient(-5, -8, 2, 0, 0, 16);
+    grad.addColorStop(0, '#B3E5FC');
+    grad.addColorStop(1, level === 2 ? '#0277BD' : '#03A9F4');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI*2); ctx.fill();
+    // Highlight arc
+    ctx.strokeStyle = 'rgba(200,240,255,0.8)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(-4, -5, 7, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
+    // Small highlight dot
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath(); ctx.arc(-5, -8, 3, 0, Math.PI*2); ctx.fill();
+    // Ice particle dots floating around
+    const dotAngles = [0, Math.PI*2/3, Math.PI*4/3];
+    dotAngles.forEach((a, i) => {
+      const r = 18 + Math.sin(animTime * 2 + i * 1.2) * 2;
+      const px = Math.cos(a + animTime * 0.8) * r;
+      const py = Math.sin(a + animTime * 0.8) * r;
+      ctx.fillStyle = 'rgba(100,200,255,0.7)';
+      ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI*2); ctx.fill();
+    });
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-4, -2, 3.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -2, 3.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#1a237e';
+    ctx.beginPath(); ctx.arc(-3.5, -2, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4.5, -2, 1.8, 0, Math.PI*2); ctx.fill();
+  } else if (type === 2) {
+    // 辣椒大炮: red ellipse body + flame + angry eyebrows
+    const grad = ctx.createRadialGradient(-4, -6, 2, 0, 2, 16);
+    grad.addColorStop(0, '#EF9A9A');
+    grad.addColorStop(1, level === 2 ? '#B71C1C' : '#FF5722');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, 2, 13, 16, 0, 0, Math.PI*2); ctx.fill();
+    // Body highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.ellipse(-4, -5, 5, 7, -0.3, 0, Math.PI*2); ctx.fill();
+    // Flame on top - flickers with animTime
+    const flicker = Math.sin(animTime * 12) * 2;
+    ctx.fillStyle = '#FF9800';
+    ctx.beginPath();
+    ctx.moveTo(-5, -14); ctx.quadraticCurveTo(-8 + flicker, -20, 0, -22 - flicker);
+    ctx.quadraticCurveTo(8 - flicker, -20, 5, -14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(-3, -14); ctx.quadraticCurveTo(-4 + flicker*0.5, -18, 0, -19 - flicker*0.5);
+    ctx.quadraticCurveTo(4 - flicker*0.5, -18, 3, -14);
+    ctx.closePath(); ctx.fill();
+    // Angry eyebrows
+    ctx.strokeStyle = '#7B1900'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-8, -5); ctx.lineTo(-3, -8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, -5); ctx.lineTo(3, -8); ctx.stroke();
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-4, -1, 3.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -1, 3.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(-4, -1, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -1, 2, 0, Math.PI*2); ctx.fill();
+  } else if (type === 3) {
+    // 蘑菇地雷: purple cap + white dots + beige stem + closed eyes
+    // Stem
+    ctx.fillStyle = '#F5DEB3';
+    ctx.beginPath(); ctx.roundRect(-7, 2, 14, 14, 3); ctx.fill();
+    ctx.fillStyle = '#DEB887';
+    ctx.fillRect(-7, 12, 14, 4);
+    // Purple mushroom cap
+    ctx.fillStyle = '#9C27B0';
+    ctx.beginPath(); ctx.arc(0, 0, 16, Math.PI, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#7B1FA2';
+    ctx.beginPath(); ctx.arc(0, 0, 16, Math.PI, 0);
+    ctx.quadraticCurveTo(0, 6, 0, 0); ctx.closePath(); ctx.fill();
+    // White polka dots on cap
+    [[0, -8], [-8, -3], [8, -3], [-4, -12], [4, -12]].forEach(([dx, dy]) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI*2); ctx.fill();
+    });
+    // Cap highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.ellipse(-5, -7, 5, 3, -0.5, 0, Math.PI*2); ctx.fill();
+    // Closed sleepy eyes on stem
+    ctx.strokeStyle = '#5D4037'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(-4, 8, 3, Math.PI + 0.3, Math.PI * 2 - 0.3); ctx.stroke();
+    ctx.beginPath(); ctx.arc(4, 8, 3, Math.PI + 0.3, Math.PI * 2 - 0.3); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ========== ENEMY FALLBACK DRAWING ==========
+function drawEnemyFallback(ctx, type, size, animTime) {
+  ctx.save();
+  if (type === 'caterpillar') {
+    // 小青虫: 3 green circles decreasing + antennae + big eyes + blush
+    const bodyParts = [{x: 8, y: 2, r: 9}, {x: -2, y: 0, r: 7}, {x: -11, y: -1, r: 5.5}];
+    bodyParts.forEach(({x, y, r}) => {
+      ctx.fillStyle = '#66BB6A';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.3, r*0.4, 0, Math.PI*2); ctx.fill();
+    });
+    // Antennae from head
+    ctx.strokeStyle = '#388E3C'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(8, -7); ctx.lineTo(4, -16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, -7); ctx.lineTo(13, -16); ctx.stroke();
+    ctx.fillStyle = '#2E7D32';
+    ctx.beginPath(); ctx.arc(4, -17, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(13, -17, 2.5, 0, Math.PI*2); ctx.fill();
+    // Big eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(6, 0, 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(11, 0, 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#1a237e';
+    ctx.beginPath(); ctx.arc(7, 0, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(12, 0, 2.5, 0, Math.PI*2); ctx.fill();
+    // Eye shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(7.8, -0.8, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(12.8, -0.8, 1, 0, Math.PI*2); ctx.fill();
+    // Blush
+    ctx.fillStyle = 'rgba(255,150,150,0.5)';
+    ctx.beginPath(); ctx.ellipse(5, 4, 4, 2.5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(13, 4, 4, 2.5, 0, 0, Math.PI*2); ctx.fill();
+  } else if (type === 'ant') {
+    // 红蚂蚁: red head + body + 6 legs + white fangs
+    // 6 legs
+    ctx.strokeStyle = '#B71C1C'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    [[-4, 2], [0, 1], [4, 2]].forEach(([bx, by]) => {
+      ctx.beginPath(); ctx.moveTo(bx - 3, by); ctx.lineTo(bx - 9, by + 6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx + 3, by); ctx.lineTo(bx + 9, by + 6); ctx.stroke();
+    });
+    // Body
+    ctx.fillStyle = '#D32F2F';
+    ctx.beginPath(); ctx.ellipse(2, 3, 7, 5, 0.2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#B71C1C';
+    ctx.beginPath(); ctx.ellipse(2, 3, 7, 5, 0.2, 0, Math.PI*2); ctx.fill();
+    // Head
+    const headGrad = ctx.createRadialGradient(-5, -6, 1, -4, -4, 9);
+    headGrad.addColorStop(0, '#EF5350');
+    headGrad.addColorStop(1, '#C62828');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath(); ctx.ellipse(-4, -4, 9, 8, -0.2, 0, Math.PI*2); ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-8, -6, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-1, -6, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(-8, -6, 1.4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-1, -6, 1.4, 0, Math.PI*2); ctx.fill();
+    // White fangs
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(-10, -1); ctx.lineTo(-13, 3); ctx.lineTo(-8, 2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-1, -1); ctx.lineTo(2, 3); ctx.lineTo(-3, 2); ctx.closePath(); ctx.fill();
+    // Antennae
+    ctx.strokeStyle = '#B71C1C'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-7, -12); ctx.lineTo(-12, -18); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-2, -11); ctx.lineTo(2, -18); ctx.stroke();
+  } else if (type === 'beetle') {
+    // 铁甲虫: black body + gray hard-shell highlight + metal sheen + small red eyes
+    const shellGrad = ctx.createRadialGradient(-3, -6, 2, 0, 0, 16);
+    shellGrad.addColorStop(0, '#546E7A');
+    shellGrad.addColorStop(0.5, '#263238');
+    shellGrad.addColorStop(1, '#000');
+    ctx.fillStyle = shellGrad;
+    ctx.beginPath(); ctx.ellipse(0, 0, 14, 12, 0, 0, Math.PI*2); ctx.fill();
+    // Shell ridge line
+    ctx.strokeStyle = 'rgba(150,200,220,0.4)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, 12); ctx.stroke();
+    // Metallic sheen band
+    const sheenGrad = ctx.createLinearGradient(-14, -6, 14, -6);
+    sheenGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    sheenGrad.addColorStop(0.4, 'rgba(180,220,230,0.35)');
+    sheenGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheenGrad;
+    ctx.beginPath(); ctx.ellipse(0, -4, 12, 5, 0, 0, Math.PI*2); ctx.fill();
+    // Shell highlight arcs
+    ctx.strokeStyle = 'rgba(200,230,240,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(-4, -3, 6, Math.PI * 1.1, Math.PI * 1.8); ctx.stroke();
+    ctx.beginPath(); ctx.arc(4, -3, 6, Math.PI * 1.2, Math.PI * 1.7); ctx.stroke();
+    // Small red eyes
+    ctx.fillStyle = '#F44336';
+    ctx.beginPath(); ctx.arc(-5, -8, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -8, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FF8A80';
+    ctx.beginPath(); ctx.arc(-5, -9, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -9, 1, 0, Math.PI*2); ctx.fill();
+    // Legs
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    [[-5, 2], [0, 3], [5, 4]].forEach(([bx, by]) => {
+      ctx.beginPath(); ctx.moveTo(-bx, by); ctx.lineTo(-bx - 10, by + 5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 10, by + 5); ctx.stroke();
+    });
+  } else if (type === 'bugking') {
+    // 虫王: purple large oval + gold crown + glow + fierce expression
+    // Outer glow
+    const glowGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, 22);
+    glowGrad.addColorStop(0, 'rgba(180,0,255,0.3)');
+    glowGrad.addColorStop(1, 'rgba(180,0,255,0)');
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill();
+    // Body
+    const bodyGrad = ctx.createRadialGradient(-5, -8, 3, 0, 0, 18);
+    bodyGrad.addColorStop(0, '#CE93D8');
+    bodyGrad.addColorStop(1, '#6A1B9A');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath(); ctx.ellipse(0, 2, 16, 14, 0, 0, Math.PI*2); ctx.fill();
+    // Body highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.ellipse(-5, -4, 6, 4, -0.3, 0, Math.PI*2); ctx.fill();
+    // Gold crown
+    const crownY = -14;
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(-10, crownY);
+    ctx.lineTo(-10, crownY - 8);
+    ctx.lineTo(-5, crownY - 4);
+    ctx.lineTo(0, crownY - 11);
+    ctx.lineTo(5, crownY - 4);
+    ctx.lineTo(10, crownY - 8);
+    ctx.lineTo(10, crownY);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#FFA000'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-10, crownY); ctx.lineTo(-10, crownY - 8);
+    ctx.lineTo(-5, crownY - 4); ctx.lineTo(0, crownY - 11);
+    ctx.lineTo(5, crownY - 4); ctx.lineTo(10, crownY - 8);
+    ctx.lineTo(10, crownY); ctx.stroke();
+    // Crown gems
+    ctx.fillStyle = '#F44336'; ctx.beginPath(); ctx.arc(-5, crownY - 5, 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#2196F3'; ctx.beginPath(); ctx.arc(5, crownY - 5, 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#4CAF50'; ctx.beginPath(); ctx.arc(0, crownY - 11, 2.5, 0, Math.PI*2); ctx.fill();
+    // Eyes - fierce
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-6, -1, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -1, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FF1744';
+    ctx.beginPath(); ctx.arc(-6, -1, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -1, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(-5.5, -1, 1.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6.5, -1, 1.5, 0, Math.PI*2); ctx.fill();
+    // Angry brows
+    ctx.strokeStyle = '#4A148C'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-10, -7); ctx.lineTo(-3, -5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(10, -7); ctx.lineTo(3, -5); ctx.stroke();
+    // Mouth - smirk
+    ctx.strokeStyle = '#4A148C'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(-5, 7); ctx.quadraticCurveTo(0, 11, 8, 8); ctx.stroke();
+    // Fangs
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(-3, 8); ctx.lineTo(-1, 13); ctx.lineTo(1, 8); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(3, 8); ctx.lineTo(5, 13); ctx.lineTo(7, 8); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
 // ========== DECORATIONS (generated once) ==========
 const DECORATIONS = [];
 (function buildDecorations() {
@@ -997,29 +1264,152 @@ const DECORATIONS = [];
   }
 })();
 
-function drawMap() {
-  // Background - deep green base
-  CTX.fillStyle = '#228B22';
-  CTX.fillRect(0, UI_TOP, W, H);
-  // Light green blotches
+// ========== GRASS TEXTURE (generated once) ==========
+const GRASS_PATCHES = [];
+const GRASS_BLADES = [];
+const PATH_FOOTPRINTS = [];
+(function buildGrassTexture() {
+  const rng = (seed) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) & 0xFFFFFFFF; return (s >>> 0) / 0xFFFFFFFF; }; };
+  const rand = rng(99);
+  // Grass patches (circle blotches) on non-path cells
   for (let gx = 0; gx < COLS; gx++) {
     for (let gy = 0; gy < ROWS; gy++) {
       if (isPath(gx, gy)) continue;
-      const hash = ((gx * 7 + gy * 13 + gx * gy * 3) & 0xFF) / 255;
-      if (hash > 0.55) {
-        CTX.fillStyle = `rgba(144,238,90,${0.15 + hash * 0.2})`;
-        CTX.fillRect(gx * CELL, gy * CELL + UI_TOP, CELL, CELL);
+      const cx = gx * CELL, cy = gy * CELL + UI_TOP;
+      const count = 2 + Math.floor(rand() * 2);
+      for (let i = 0; i < count; i++) {
+        const px = cx + rand() * CELL;
+        const py = cy + rand() * CELL;
+        const r = 8 + rand() * 14;
+        const color = rand() < 0.5 ? '#3d9e4f' : '#4db860';
+        const alpha = 0.3 + rand() * 0.25;
+        GRASS_PATCHES.push({ x: px, y: py, r, color, alpha });
       }
     }
   }
+  // Grass blades (tiny triangles) scattered randomly on non-path cells
+  for (let i = 0; i < 280; i++) {
+    const gx = Math.floor(rand() * COLS);
+    const gy = Math.floor(rand() * ROWS);
+    if (isPath(gx, gy)) { i--; continue; }
+    const bx = gx * CELL + rand() * CELL;
+    const by = gy * CELL + UI_TOP + rand() * CELL;
+    const h = 3 + rand() * 4;
+    const w = 2 + rand() * 2;
+    const c = rand() < 0.5 ? '#5fd470' : '#6ee87a';
+    GRASS_BLADES.push({ x: bx, y: by, h, w, c });
+  }
+  // Path footprints
+  const rand2 = rng(77);
+  for (let i = 0; i < 30; i++) {
+    const idx = Math.floor(rand2() * PATH.length);
+    const p = PATH[idx];
+    const px = p.x * CELL + CELL/2 + (rand2()-0.5) * CELL * 0.6;
+    const py = p.y * CELL + UI_TOP + CELL/2 + (rand2()-0.5) * CELL * 0.6;
+    const angle = rand2() * Math.PI * 2;
+    PATH_FOOTPRINTS.push({ x: px, y: py, angle });
+  }
+})();
 
-  // Hover highlight (no grid lines)
+function drawMap() {
+  // === LAYER 1: Deep green base ===
+  CTX.fillStyle = '#1a5c28';
+  CTX.fillRect(0, UI_TOP, W, H);
+
+  // === LAYER 2: Grass patches (circle blotches) ===
+  for (const p of GRASS_PATCHES) {
+    CTX.globalAlpha = p.alpha;
+    CTX.fillStyle = p.color;
+    CTX.beginPath(); CTX.arc(p.x, p.y, p.r, 0, Math.PI*2); CTX.fill();
+  }
+  CTX.globalAlpha = 1;
+
+  // === LAYER 3: Grass blades (tiny triangles) ===
+  for (const b of GRASS_BLADES) {
+    CTX.fillStyle = b.c;
+    CTX.beginPath();
+    CTX.moveTo(b.x, b.y - b.h);
+    CTX.lineTo(b.x - b.w/2, b.y);
+    CTX.lineTo(b.x + b.w/2, b.y);
+    CTX.closePath(); CTX.fill();
+  }
+
+  // === TOWER PLACEMENT SLOTS: subtle circular indentation ===
+  for (let gx = 0; gx < COLS; gx++) {
+    for (let gy = 0; gy < ROWS; gy++) {
+      if (isPath(gx, gy)) continue;
+      const hasTower = towers.some(t => t.gx === gx && t.gy === gy);
+      if (hasTower) continue;
+      const hasObs = getObstacleAt(gx, gy);
+      if (hasObs) continue;
+      const cx = gx * CELL + CELL/2;
+      const cy = gy * CELL + UI_TOP + CELL/2;
+      CTX.globalAlpha = 0.18;
+      CTX.fillStyle = '#0a3a10';
+      CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.fill();
+      CTX.globalAlpha = 0.12;
+      CTX.strokeStyle = '#2a6a30';
+      CTX.lineWidth = 1.5;
+      CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.stroke();
+      CTX.globalAlpha = 1;
+    }
+  }
+
+  // Hover highlight
   if (mouseGX >= 0 && mouseGX < COLS && mouseGY >= 0 && mouseGY < ROWS && !isPath(mouseGX, mouseGY)) {
     CTX.fillStyle = 'rgba(255,255,255,0.15)';
     CTX.fillRect(mouseGX * CELL, mouseGY * CELL + UI_TOP, CELL, CELL);
   }
 
-  // Decorations (flowers and rocks on non-path cells)
+  // === PATH RENDERING ===
+  // First pass: fill all path cells with warm earth tone (slightly expanded to avoid gaps)
+  CTX.fillStyle = '#C4A46C';
+  for (const p of PATH) {
+    CTX.fillRect(p.x * CELL - 1, p.y * CELL + UI_TOP - 1, CELL + 2, CELL + 2);
+  }
+  // Second pass: subtle path shading variation
+  for (const p of PATH) {
+    const hash = ((p.x * 11 + p.y * 17) & 0xFF) / 255;
+    CTX.fillStyle = `rgba(${hash > 0.5 ? 255 : 180},${hash > 0.5 ? 240 : 200},${hash > 0.5 ? 180 : 130},0.08)`;
+    CTX.fillRect(p.x * CELL, p.y * CELL + UI_TOP, CELL, CELL);
+  }
+  // Path border: only draw edges that face non-path cells
+  CTX.strokeStyle = '#8B7355';
+  CTX.lineWidth = 2;
+  const pathSet = PATH_SET;
+  for (const p of PATH) {
+    const px = p.x * CELL, py = p.y * CELL + UI_TOP;
+    // Check each of 4 edges
+    if (!pathSet.has(p.x + ',' + (p.y - 1))) { // top edge
+      CTX.beginPath(); CTX.moveTo(px, py + 1); CTX.lineTo(px + CELL, py + 1); CTX.stroke();
+    }
+    if (!pathSet.has(p.x + ',' + (p.y + 1))) { // bottom edge
+      CTX.beginPath(); CTX.moveTo(px, py + CELL - 1); CTX.lineTo(px + CELL, py + CELL - 1); CTX.stroke();
+    }
+    if (!pathSet.has((p.x - 1) + ',' + p.y)) { // left edge
+      CTX.beginPath(); CTX.moveTo(px + 1, py); CTX.lineTo(px + 1, py + CELL); CTX.stroke();
+    }
+    if (!pathSet.has((p.x + 1) + ',' + p.y)) { // right edge
+      CTX.beginPath(); CTX.moveTo(px + CELL - 1, py); CTX.lineTo(px + CELL - 1, py + CELL); CTX.stroke();
+    }
+  }
+  // Path footprints
+  CTX.fillStyle = 'rgba(180,150,100,0.35)';
+  for (const fp of PATH_FOOTPRINTS) {
+    CTX.save();
+    CTX.translate(fp.x, fp.y);
+    CTX.rotate(fp.angle);
+    // Left foot
+    CTX.beginPath(); CTX.ellipse(-4, 0, 3, 5, 0, 0, Math.PI*2); CTX.fill();
+    // Right foot
+    CTX.beginPath(); CTX.ellipse(4, 0, 3, 5, 0, 0, Math.PI*2); CTX.fill();
+    CTX.restore();
+  }
+
+  // Draw obstacles
+  for (const o of obstacles) o.draw();
+
+  // === DECORATIONS (flowers/small rocks on grass) ===
   for (const d of DECORATIONS) {
     const hasTower = towers.some(t => t.gx === d.gx && t.gy === d.gy);
     if (hasTower) continue;
@@ -1031,44 +1421,91 @@ function drawMap() {
       CTX.fillStyle = '#fff';
       CTX.beginPath(); CTX.arc(cx, cy, 1.5, 0, Math.PI*2); CTX.fill();
     } else {
-      CTX.fillStyle = 'rgba(120,120,120,0.7)';
+      CTX.fillStyle = 'rgba(120,120,120,0.5)';
       CTX.beginPath(); CTX.ellipse(cx, cy, 5, 3, 0.3, 0, Math.PI*2); CTX.fill();
     }
   }
 
-  // Path with gradient earth tone
-  for (const p of PATH) {
-    const px = p.x * CELL, py = p.y * CELL + UI_TOP;
-    const grad = CTX.createLinearGradient(px, py, px + CELL, py + CELL);
-    grad.addColorStop(0, '#D2B48C');
-    grad.addColorStop(1, '#F5DEB3');
-    CTX.fillStyle = grad;
-    CTX.beginPath();
-    CTX.roundRect(px + 1, py + 1, CELL - 2, CELL - 2, 4);
-    CTX.fill();
-  }
-
-  // Entrance
+  // === ENTRANCE: brown wooden door frame + red arrow ===
   const ep = cellToPixel(0, 1);
-
-  // Draw obstacles
-  for (const o of obstacles) o.draw();
-
-  // Entrance icon
   if (!drawImg('entrance', ep.x - 20, ep.y - 20, 40, 40)) {
-    CTX.fillStyle = '#FF5722'; CTX.font = 'bold 12px Arial'; CTX.textAlign = 'center';
-    CTX.fillText('入口', ep.x, ep.y + 4);
+    CTX.save();
+    CTX.translate(ep.x, ep.y);
+    // Door frame posts
+    CTX.fillStyle = '#6D4C41';
+    CTX.fillRect(-16, -18, 5, 30); // left post
+    CTX.fillRect(11, -18, 5, 30);  // right post
+    CTX.fillRect(-16, -18, 32, 5); // top beam
+    // Door frame highlights
+    CTX.fillStyle = 'rgba(255,220,180,0.3)';
+    CTX.fillRect(-15, -17, 2, 28);
+    CTX.fillRect(12, -17, 2, 28);
+    // Red arrow pointing right (into path)
+    CTX.fillStyle = '#FF3300';
+    CTX.beginPath();
+    CTX.moveTo(-6, -26); CTX.lineTo(6, -26); CTX.lineTo(6, -29);
+    CTX.lineTo(12, -22); CTX.lineTo(6, -15); CTX.lineTo(6, -18);
+    CTX.lineTo(-6, -18); CTX.closePath(); CTX.fill();
+    CTX.fillStyle = 'rgba(255,150,100,0.6)';
+    CTX.beginPath(); CTX.moveTo(-4, -25); CTX.lineTo(4, -25); CTX.lineTo(4, -19); CTX.lineTo(-4, -19); CTX.closePath(); CTX.fill();
+    CTX.restore();
   }
 
-  // Carrot at end
+  // === CARROT at end ===
   const cp = cellToPixel(14, 11);
   const sway = Math.sin(menuAnimTime * 2) * 3;
   CTX.save();
-  CTX.translate(cp.x + sway, cp.y);
+  // Carrot shake effect
+  const csx = carrotShake > 0 ? (Math.random()-0.5)*8*(carrotShake/0.4) : 0;
+  const csy = carrotShake > 0 ? (Math.random()-0.5)*6*(carrotShake/0.4) : 0;
+  CTX.translate(cp.x + sway + csx, cp.y + csy);
   CTX.rotate(sway * 0.03);
   if (!drawImg('carrot', -20, -20, 40, 40)) {
-    CTX.fillStyle = '#FF9800'; CTX.font = 'bold 12px Arial'; CTX.textAlign = 'center';
-    CTX.fillText('🥕', 0, 4);
+    // === CARROT GLOW ===
+    const glowAlpha = 0.4 + 0.15 * Math.sin(menuAnimTime * 3);
+    const glowGrad = CTX.createRadialGradient(0, 8, 2, 0, 8, 28);
+    glowGrad.addColorStop(0, `rgba(255,240,120,${glowAlpha})`);
+    glowGrad.addColorStop(1, 'rgba(255,200,50,0)');
+    CTX.fillStyle = glowGrad;
+    CTX.beginPath(); CTX.arc(0, 8, 28, 0, Math.PI*2); CTX.fill();
+    // Carrot red flash
+    if (carrotFlash > 0) {
+      CTX.fillStyle = `rgba(255,0,0,${carrotFlash * 0.8})`;
+      CTX.beginPath(); CTX.arc(0, 0, 24, 0, Math.PI*2); CTX.fill();
+    }
+    // Carrot body: orange trapezoid (wider top, tapering to point)
+    CTX.fillStyle = '#FF8C00';
+    CTX.beginPath();
+    CTX.moveTo(-12, -8); CTX.lineTo(12, -8); // top
+    CTX.lineTo(4, 14); CTX.lineTo(-4, 14); // bottom (narrow)
+    CTX.closePath(); CTX.fill();
+    // Body taper to tip
+    CTX.fillStyle = '#E07000';
+    CTX.beginPath(); CTX.moveTo(-4, 14); CTX.lineTo(0, 20); CTX.lineTo(4, 14); CTX.closePath(); CTX.fill();
+    // Body highlight
+    CTX.fillStyle = 'rgba(255,200,80,0.4)';
+    CTX.beginPath(); CTX.moveTo(-10, -7); CTX.lineTo(-4, -7); CTX.lineTo(-6, 8); CTX.lineTo(-10, 6); CTX.closePath(); CTX.fill();
+    // Carrot ridges
+    CTX.strokeStyle = '#C05500'; CTX.lineWidth = 1;
+    for (let ry = -3; ry <= 9; ry += 5) {
+      const hw = 12 - (ry + 8) * 0.5;
+      CTX.beginPath(); CTX.moveTo(-hw, ry); CTX.quadraticCurveTo(0, ry+2, hw, ry); CTX.stroke();
+    }
+    // Green leaf stems
+    CTX.strokeStyle = '#2E7D32'; CTX.lineWidth = 2.5; CTX.lineCap = 'round';
+    CTX.beginPath(); CTX.moveTo(-4, -8); CTX.quadraticCurveTo(-10, -16, -6, -24); CTX.stroke();
+    CTX.beginPath(); CTX.moveTo(4, -8); CTX.quadraticCurveTo(10, -16, 6, -24); CTX.stroke();
+    // Three green leaves at top
+    [[0, -18, 0], [-8, -20, -0.4], [8, -20, 0.4]].forEach(([lx, ly, rot]) => {
+      CTX.save();
+      CTX.translate(lx, ly); CTX.rotate(rot);
+      CTX.fillStyle = '#43A047';
+      CTX.beginPath();
+      CTX.moveTo(0, 0); CTX.quadraticCurveTo(-6, -5, -4, -11);
+      CTX.quadraticCurveTo(0, -8, 4, -11); CTX.quadraticCurveTo(6, -5, 0, 0);
+      CTX.fill();
+      CTX.restore();
+    });
   }
   CTX.restore();
 
@@ -1396,23 +1833,126 @@ function drawMenu() {
 
 function drawEndScreen(win) {
   if (win) {
-    // Victory: normal overlay
-    CTX.fillStyle = 'rgba(0,0,0,0.7)';
+    // Victory: darken background
+    CTX.fillStyle = 'rgba(0,0,0,0.75)';
     CTX.fillRect(0, 0, W, TOTAL_H);
+    // Gold panel
+    const panW = 320, panH = 220;
+    const panX = W/2 - panW/2, panY = TOTAL_H/2 - panH/2;
+    // Panel shadow
+    CTX.shadowColor = 'rgba(255,215,0,0.5)'; CTX.shadowBlur = 30;
+    // Panel gradient background
+    const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
+    panGrad.addColorStop(0, '#2a1a4a');
+    panGrad.addColorStop(1, '#1a1a3a');
+    CTX.fillStyle = panGrad;
+    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 16); CTX.fill();
+    // Gold border
+    CTX.strokeStyle = '#DAA520'; CTX.lineWidth = 2;
+    CTX.beginPath(); CTX.roundRect(panX + 1, panY + 1, panW - 2, panH - 2, 16); CTX.stroke();
+    CTX.shadowBlur = 0;
+    // Inner subtle line
+    CTX.strokeStyle = 'rgba(255,215,0,0.2)'; CTX.lineWidth = 1;
+    CTX.beginPath(); CTX.roundRect(panX + 6, panY + 6, panW - 12, panH - 12, 12); CTX.stroke();
+    // Title text with stroke
+    CTX.textAlign = 'center'; CTX.font = 'bold 28px Arial';
+    CTX.strokeStyle = '#fff'; CTX.lineWidth = 4;
+    CTX.strokeText('🎉 菜园保卫成功！', W/2, panY + 54);
+    CTX.fillStyle = '#FFD700';
+    CTX.fillText('🎉 菜园保卫成功！', W/2, panY + 54);
+    // Stats
+    CTX.font = 'bold 16px Arial';
+    const stats = [
+      { icon: '⚔️', label: '击杀总数', val: totalKills },
+      { icon: '❤️', label: '剩余生命', val: lives },
+      { icon: '💰', label: '剩余金币', val: gold }
+    ];
+    stats.forEach((s, i) => {
+      const sy = panY + 88 + i * 34;
+      CTX.fillStyle = 'rgba(255,255,255,0.08)';
+      CTX.beginPath(); CTX.roundRect(panX + 20, sy - 14, panW - 40, 26, 6); CTX.fill();
+      CTX.fillStyle = '#ddd'; CTX.textAlign = 'left'; CTX.font = '15px Arial';
+      CTX.fillText(s.icon + ' ' + s.label, panX + 36, sy + 6);
+      CTX.fillStyle = '#FFD700'; CTX.textAlign = 'right'; CTX.font = 'bold 16px Arial';
+      CTX.fillText(s.val, panX + panW - 36, sy + 6);
+    });
+    // "再来一局" button
+    const btnX = W/2 - 80, btnY = panY + panH - 56, btnW = 160, btnH = 44;
+    const btnScale = 1 + 0.04 * Math.sin(menuAnimTime * 4);
+    CTX.save();
+    CTX.translate(W/2, btnY + btnH/2);
+    CTX.scale(btnScale, btnScale);
+    CTX.translate(-W/2, -(btnY + btnH/2));
+    const btnGrad = CTX.createLinearGradient(btnX, btnY, btnX, btnY + btnH);
+    btnGrad.addColorStop(0, '#66BB6A'); btnGrad.addColorStop(1, '#2E7D32');
+    CTX.fillStyle = btnGrad;
+    CTX.shadowColor = 'rgba(100,200,100,0.5)'; CTX.shadowBlur = 12;
+    CTX.beginPath(); CTX.roundRect(btnX, btnY, btnW, btnH, 10); CTX.fill();
+    CTX.shadowBlur = 0;
+    // Gloss
+    const gloss = CTX.createLinearGradient(btnX, btnY, btnX, btnY + btnH/2);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.25)'); gloss.addColorStop(1, 'rgba(255,255,255,0)');
+    CTX.fillStyle = gloss;
+    CTX.beginPath(); CTX.roundRect(btnX + 2, btnY + 2, btnW - 4, btnH/2 - 2, [8, 8, 0, 0]); CTX.fill();
+    CTX.strokeStyle = '#A5D6A7'; CTX.lineWidth = 1;
+    CTX.beginPath(); CTX.roundRect(btnX, btnY, btnW, btnH, 10); CTX.stroke();
+    CTX.fillStyle = '#fff'; CTX.font = 'bold 20px Arial'; CTX.textAlign = 'center';
+    CTX.fillText('再来一局 🎮', W/2, btnY + btnH/2 + 7);
+    CTX.restore();
   } else {
-    // Defeat: gray desaturated overlay + red border flicker
-    CTX.fillStyle = 'rgba(100,100,100,0.5)';
+    // Defeat: gray overlay
+    CTX.fillStyle = 'rgba(0,0,0,0.8)';
     CTX.fillRect(0, 0, W, TOTAL_H);
-    const redAlpha = 0.3 + 0.4 * (0.5 + 0.5 * Math.sin(menuAnimTime * 6));
-    CTX.strokeStyle = `rgba(255,0,0,${redAlpha})`;
-    CTX.lineWidth = 6;
-    CTX.strokeRect(3, 3, W - 6, TOTAL_H - 6);
+    // Red flicker border
+    const redAlpha = 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(menuAnimTime * 6));
+    CTX.strokeStyle = `rgba(255,0,0,${redAlpha})`; CTX.lineWidth = 8;
+    CTX.strokeRect(4, 4, W - 8, TOTAL_H - 8);
+    CTX.strokeStyle = `rgba(255,80,80,${redAlpha * 0.5})`; CTX.lineWidth = 4;
+    CTX.strokeRect(12, 12, W - 24, TOTAL_H - 24);
+    // Dark gray panel
+    const panW = 280, panH = 180;
+    const panX = W/2 - panW/2, panY = TOTAL_H/2 - panH/2;
+    const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
+    panGrad.addColorStop(0, '#2a2a2a');
+    panGrad.addColorStop(1, '#1a1a1a');
+    CTX.fillStyle = panGrad;
+    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.fill();
+    CTX.strokeStyle = `rgba(200,0,0,${redAlpha})`; CTX.lineWidth = 2;
+    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.stroke();
+    // Title
+    CTX.textAlign = 'center'; CTX.font = 'bold 28px Arial';
+    CTX.strokeStyle = '#600'; CTX.lineWidth = 4;
+    CTX.strokeText('💀 萝卜被偷走了...', W/2, panY + 50);
+    CTX.fillStyle = '#FF5252';
+    CTX.fillText('💀 萝卜被偷走了...', W/2, panY + 50);
+    // Wave info
+    CTX.font = '18px Arial'; CTX.fillStyle = '#ccc';
+    CTX.strokeStyle = '#300'; CTX.lineWidth = 2;
+    CTX.strokeText('坚持到第 ' + wave + ' / ' + WAVES.length + ' 波', W/2, panY + 90);
+    CTX.fillText('坚持到第 ' + wave + ' / ' + WAVES.length + ' 波', W/2, panY + 90);
+    CTX.font = '14px Arial'; CTX.fillStyle = '#999';
+    CTX.fillText('击杀了 ' + totalKills + ' 只害虫', W/2, panY + 118);
+    // "重新挑战" button
+    const btnX = W/2 - 80, btnY = panY + panH - 52, btnW = 160, btnH = 40;
+    const btnScale = 1 + 0.04 * Math.sin(menuAnimTime * 4);
+    CTX.save();
+    CTX.translate(W/2, btnY + btnH/2);
+    CTX.scale(btnScale, btnScale);
+    CTX.translate(-W/2, -(btnY + btnH/2));
+    const btnGrad = CTX.createLinearGradient(btnX, btnY, btnX, btnY + btnH);
+    btnGrad.addColorStop(0, '#FF7043'); btnGrad.addColorStop(1, '#BF360C');
+    CTX.fillStyle = btnGrad;
+    CTX.shadowColor = 'rgba(255,100,50,0.5)'; CTX.shadowBlur = 12;
+    CTX.beginPath(); CTX.roundRect(btnX, btnY, btnW, btnH, 10); CTX.fill();
+    CTX.shadowBlur = 0;
+    const gloss = CTX.createLinearGradient(btnX, btnY, btnX, btnY + btnH/2);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.2)'); gloss.addColorStop(1, 'rgba(255,255,255,0)');
+    CTX.fillStyle = gloss;
+    CTX.beginPath(); CTX.roundRect(btnX + 2, btnY + 2, btnW - 4, btnH/2 - 2, [8, 8, 0, 0]); CTX.fill();
+    CTX.fillStyle = '#fff'; CTX.font = 'bold 18px Arial'; CTX.textAlign = 'center';
+    CTX.fillText('重新挑战 🔥', W/2, btnY + btnH/2 + 6);
+    CTX.restore();
   }
-  CTX.fillStyle = win ? '#4CAF50' : '#f44336';
-  CTX.font = 'bold 48px Arial'; CTX.textAlign = 'center';
-  CTX.fillText(win ? '🎉 胜利！' : '💀 失败！', W/2, TOTAL_H/2 - 20);
-  CTX.fillStyle = '#fff'; CTX.font = '20px Arial';
-  CTX.fillText('点击返回菜单', W/2, TOTAL_H/2 + 30);
 }
 
 // ========== GAME LOOP ==========
@@ -1422,6 +1962,8 @@ function update(dt) {
   // Decay screen shake and gold bounce
   if (screenShake > 0) screenShake = Math.max(0, screenShake - dt);
   if (goldBounce > 0) goldBounce = Math.max(0, goldBounce - dt * 3);
+  if (carrotFlash > 0) carrotFlash = Math.max(0, carrotFlash - dt * 2);
+  if (carrotShake > 0) carrotShake = Math.max(0, carrotShake - dt * 2);
 
   // Prep timer
   if (prepTimer > 0 && !waveActive) {
