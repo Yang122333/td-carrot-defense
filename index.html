@@ -126,6 +126,59 @@ let lastTime = 0;
 let waveClearBanner = null; // { timer, maxTimer }
 let menuAnimTime = 0; // animation timer for menu screen
 let fireworkTimer = 0; // timer for victory fireworks
+// Stats tracking
+let totalKills = 0, carrotFlash = 0, carrotShake = 0;
+
+// ========== AUDIO SYSTEM ==========
+let audioCtx = null;
+function initAudio() {
+  if (audioCtx) return;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+function playSound(type) {
+  if (!audioCtx) return;
+  try {
+    if (type === 'place') {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.setValueAtTime(300, audioCtx.currentTime);
+      g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      o.start(); o.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'shoot') {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.setValueAtTime(800, audioCtx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.05);
+      g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+      o.start(); o.stop(audioCtx.currentTime + 0.05);
+    } else if (type === 'kill') {
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.15, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      const src = audioCtx.createBufferSource(), g = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass'; filter.frequency.value = 200;
+      src.buffer = buf; src.connect(filter); filter.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+      src.start(); src.stop(audioCtx.currentTime + 0.15);
+    } else if (type === 'wave') {
+      const notes = [523, 659, 784];
+      notes.forEach((freq, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value = freq;
+        const t = audioCtx.currentTime + i * 0.12;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.25, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        o.start(t); o.stop(t + 0.25);
+      });
+    }
+  } catch(e) {}
+}
 
 const TOWER_DEFS = [
   { name: '玉米射手', key: 'corn', cost: 100, dmg: 15, rate: 1.0, range: 3, aoe: 0, slow: 0, slowDur: 0, mine: false,
@@ -358,6 +411,8 @@ class Enemy {
       this.isMoving = false;
       lives -= this.lifeCost;
       this.alive = false;
+      carrotFlash = 0.5;
+      carrotShake = 0.4;
       return;
     }
     const target = PATH[this.pathIdx + 1];
@@ -416,6 +471,8 @@ class Enemy {
       gold += this.reward;
       goldBounce = 0.3;
       screenShake = 0.15;
+      totalKills++;
+      playSound('kill');
       floatTexts.push({ text: '+' + this.reward, x: this.x, y: this.y, timer: 1.0, color: '#FFD700', startX: this.x, startY: this.y, elapsed: 0 });
       // Kill particles - enhanced explosion
       const count = 8 + Math.floor(Math.random() * 5);
@@ -608,6 +665,7 @@ class Tower {
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
       const def = TOWER_DEFS[this.type];
       bullets.push(new Bullet(this.x, this.y, target, this.dmg, this.aoe, this.slow, this.slowDur, def.bulletKey));
+      playSound('shoot');
     } else {
       // No enemy — attack obstacles
       let obsTarget = null;
@@ -629,6 +687,7 @@ class Tower {
         this.angle = Math.atan2(obsTarget.y - this.y, obsTarget.x - this.x);
         const def = TOWER_DEFS[this.type];
         bullets.push(new Bullet(this.x, this.y, obsTarget, this.dmg, this.aoe, this.slow, this.slowDur, def.bulletKey));
+        playSound('shoot');
       }
     }
   }
@@ -745,6 +804,7 @@ function startWave() {
   spawnTimer = 0;
   waveActive = true;
   prepTimer = 0;
+  playSound('wave');
 }
 
 function updateSpawning(dt) {
@@ -798,6 +858,7 @@ CVS.addEventListener('touchstart', e => { e.preventDefault(); const p = getPos(e
 CVS.addEventListener('touchmove', e => { e.preventDefault(); const p = getPos(e); inputX = p.x; inputY = p.y; const c = pixelToCell(p.x, p.y); mouseGX = c.x; mouseGY = c.y; }, { passive: false });
 
 function handleClick(p) {
+  initAudio();
   const { x, y } = p;
 
   if (gameState === 'MENU') {
@@ -813,6 +874,7 @@ function handleClick(p) {
       selectedTower = -1; selectedPlaced = null;
       markedObstacle = null;
       waveClearBanner = null;
+      totalKills = 0; carrotFlash = 0; carrotShake = 0;
       initObstacles();
     }
     return;
@@ -907,6 +969,7 @@ function handleClick(p) {
       gold -= def.cost;
       goldBounce = 0.3;
       towers.push(new Tower(selectedTower, gx, gy));
+      playSound('place');
       // Don't deselect for convenience
     }
     return;
