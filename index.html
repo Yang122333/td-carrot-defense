@@ -113,6 +113,8 @@ function isPath(cx, cy) { return PATH_SET.has(cx + ',' + cy); }
 // ========== GAME STATE ==========
 let gameState = 'MENU'; // MENU, PLAYING, WIN, LOSE
 let gold = 180, lives = 10, wave = 0, waveActive = false;
+let screenShake = 0;
+let goldBounce = 0;
 let prepTimer = 0, prepDuration = 8;
 let enemies = [], towers = [], bullets = [], effects = [], floatTexts = [], obstacles = [];
 let spawnQueue = [], spawnTimer = 0;
@@ -222,18 +224,28 @@ class Obstacle {
     if (this.hp <= 0) {
       this.alive = false;
       gold += this.reward;
+      goldBounce = 0.3;
+      screenShake = 0.2;
       floatTexts.push({ text: '+' + this.reward, x: this.x, y: this.y, timer: 1.0, color: '#FFD700', startX: this.x, startY: this.y, elapsed: 0 });
       // Gold coin particles
       for (let i = 0; i < 3; i++) {
         const delay = i * 0.1;
         effects.push({ type: 'goldcoin', x: this.x + (Math.random()-0.5)*20, y: this.y + (Math.random()-0.5)*20, timer: 0.8 + delay, maxTimer: 0.8 + delay, startX: this.x, startY: this.y, targetX: 20, targetY: 20 });
       }
-      // Debris particles
+      // Debris particles (6-8, color matching obstacle)
       const def = OBSTACLE_DEFS[this.type];
-      for (let i = 0; i < 6; i++) {
+      const debrisCount = 6 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < debrisCount; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const spd = 40 + Math.random() * 60;
-        effects.push({ type: 'killparticle', x: this.x, y: this.y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd, timer: 0.5+Math.random()*0.3, maxTimer: 0.5+Math.random()*0.3, radius: 3+Math.random()*2, color: def.color });
+        const spd = 50 + Math.random() * 80;
+        effects.push({ type: 'killparticle', x: this.x, y: this.y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd, timer: 0.5+Math.random()*0.3, maxTimer: 0.5+Math.random()*0.3, radius: 3+Math.random()*3, color: def.color });
+      }
+      // Gold coin upward particles (2-3)
+      const coinCount = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < coinCount; i++) {
+        const vx = (Math.random() - 0.5) * 60;
+        const vy = -(80 + Math.random() * 60);
+        effects.push({ type: 'killparticle', x: this.x + (Math.random()-0.5)*10, y: this.y, vx, vy, timer: 0.6+Math.random()*0.2, maxTimer: 0.6+Math.random()*0.2, radius: 4+Math.random()*2, color: '#FFD700' });
       }
       if (markedObstacle === this) markedObstacle = null;
     }
@@ -402,16 +414,20 @@ class Enemy {
     if (this.hp <= 0) {
       this.alive = false;
       gold += this.reward;
+      goldBounce = 0.3;
+      screenShake = 0.15;
       floatTexts.push({ text: '+' + this.reward, x: this.x, y: this.y, timer: 1.0, color: '#FFD700', startX: this.x, startY: this.y, elapsed: 0 });
       // Kill particles - enhanced explosion
       const count = 8 + Math.floor(Math.random() * 5);
       const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#95E1D3', '#F38181'];
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const spd = 60 + Math.random() * 80;
+        const spd = 80 + Math.random() * 70;
         const color = colors[Math.floor(Math.random() * colors.length)];
         effects.push({ type: 'killparticle', x: this.x, y: this.y, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd, timer: 0.6 + Math.random() * 0.4, maxTimer: 0.6 + Math.random() * 0.4, radius: 4 + Math.random() * 3, color });
       }
+      // White flash ring
+      effects.push({ type: 'whiteflash', x: this.x, y: this.y, timer: 0.25, maxTimer: 0.25 });
       // Gold coin absorption particles
       for (let i = 0; i < 3; i++) {
         const delay = i * 0.1;
@@ -753,6 +769,7 @@ function checkWaveComplete() {
     return;
   }
   gold += 35;
+  goldBounce = 0.3;
   floatTexts.push({ text: '+35 波次奖励', x: W/2, y: UI_TOP + H/2, timer: 1.5, color: '#FFD700', startX: W/2, startY: UI_TOP + H/2, elapsed: 0 });
   waveClearBanner = { timer: 1.5, maxTimer: 1.5 };
   prepTimer = prepDuration;
@@ -888,6 +905,7 @@ function handleClick(p) {
     const def = TOWER_DEFS[selectedTower];
     if (gold >= def.cost) {
       gold -= def.cost;
+      goldBounce = 0.3;
       towers.push(new Tower(selectedTower, gx, gy));
       // Don't deselect for convenience
     }
@@ -1008,9 +1026,12 @@ function drawMap() {
 }
 
 function drawUI() {
-  // Top bar background
-  CTX.fillStyle = '#1a1a2e';
+  // Top bar background - semi-transparent dark with bottom border
+  CTX.fillStyle = 'rgba(20,20,40,0.85)';
   CTX.fillRect(0, 0, W, UI_TOP);
+  CTX.strokeStyle = 'rgba(255,255,255,0.4)';
+  CTX.lineWidth = 1;
+  CTX.beginPath(); CTX.moveTo(0, UI_TOP - 0.5); CTX.lineTo(W, UI_TOP - 0.5); CTX.stroke();
 
   // Coin
   const iconSize = 24;
@@ -1019,7 +1040,13 @@ function drawUI() {
     CTX.fillText('💰', 10, 26);
   }
   CTX.fillStyle = '#FFD700'; CTX.font = 'bold 16px Arial'; CTX.textAlign = 'left';
+  const goldScale = 1 + goldBounce * 0.3;
+  CTX.save();
+  CTX.translate(38 + 20, 27);
+  CTX.scale(goldScale, goldScale);
+  CTX.translate(-(38 + 20), -27);
   CTX.fillText(gold, 38, 27);
+  CTX.restore();
 
   // Hearts
   if (!drawImg('icon-heart', 120, 8, iconSize, iconSize)) {
@@ -1055,10 +1082,13 @@ function drawUI() {
     }
   }
 
-  // Bottom bar
+  // Bottom bar - semi-transparent dark glass effect with top border
   const barY = UI_TOP + H;
-  CTX.fillStyle = '#1a1a2e';
+  CTX.fillStyle = 'rgba(20,20,40,0.9)';
   CTX.fillRect(0, barY, W, UI_BOT);
+  CTX.strokeStyle = 'rgba(255,255,255,0.4)';
+  CTX.lineWidth = 1;
+  CTX.beginPath(); CTX.moveTo(0, barY + 0.5); CTX.lineTo(W, barY + 0.5); CTX.stroke();
 
   for (let i = 0; i < 4; i++) {
     const def = TOWER_DEFS[i];
@@ -1069,7 +1099,12 @@ function drawUI() {
     CTX.fillStyle = selectedTower === i ? '#4CAF50' : (gold >= def.cost ? '#333' : '#222');
     CTX.strokeStyle = selectedTower === i ? '#8BC34A' : '#555';
     CTX.lineWidth = selectedTower === i ? 2 : 1;
+    if (selectedTower === i) {
+      CTX.shadowColor = '#8BC34A';
+      CTX.shadowBlur = 12;
+    }
     CTX.beginPath(); CTX.roundRect(bx, by, bw, bh, 6); CTX.fill(); CTX.stroke();
+    CTX.shadowBlur = 0;
 
     // Tower icon
     const imgKey = def.mine ? 'mushroom' : def.key + '-lv1';
@@ -1149,6 +1184,17 @@ function drawEffects(dt) {
     } else if (e.type === 'summon') {
       CTX.fillStyle = `rgba(150, 0, 255, ${e.timer})`;
       CTX.beginPath(); CTX.arc(e.x, e.y, 20 * (1 - e.timer), 0, Math.PI*2); CTX.fill();
+    } else if (e.type === 'whiteflash') {
+      const progress = 1 - e.timer / e.maxTimer;
+      const radius = 5 + progress * 30;
+      CTX.globalAlpha = (1 - progress) * 0.8;
+      CTX.strokeStyle = '#ffffff';
+      CTX.lineWidth = 3 * (1 - progress);
+      CTX.beginPath(); CTX.arc(e.x, e.y, radius, 0, Math.PI*2); CTX.stroke();
+      CTX.fillStyle = '#ffffff';
+      CTX.globalAlpha = (1 - progress) * 0.3;
+      CTX.beginPath(); CTX.arc(e.x, e.y, radius * 0.5, 0, Math.PI*2); CTX.fill();
+      CTX.globalAlpha = 1;
     } else if (e.type === 'killparticle') {
       e.x += e.vx * dt; e.y += e.vy * dt;
       const life = e.timer / e.maxTimer;
@@ -1218,7 +1264,11 @@ function drawEffects(dt) {
 }
 
 function drawMenu() {
-  CTX.fillStyle = '#1a1a2e';
+  // Gradient background: deep blue top to deep green bottom
+  const bgGrad = CTX.createLinearGradient(0, 0, 0, TOTAL_H);
+  bgGrad.addColorStop(0, '#0a0a1a');
+  bgGrad.addColorStop(1, '#0a1a0a');
+  CTX.fillStyle = bgGrad;
   CTX.fillRect(0, 0, W, TOTAL_H);
 
   if (!allAssetsReady) {
@@ -1239,9 +1289,18 @@ function drawMenu() {
   const titleW = 400, titleH = 200;
   const titleFloat = Math.sin(menuAnimTime * 2) * 8;
   if (!drawImg('title', W/2 - titleW/2, UI_TOP + 30 + titleFloat, titleW, titleH)) {
-    CTX.fillStyle = '#4CAF50'; CTX.font = 'bold 36px Arial'; CTX.textAlign = 'center';
+    CTX.textAlign = 'center';
+    CTX.font = 'bold 36px Arial';
+    CTX.strokeStyle = '#1a5c1a';
+    CTX.lineWidth = 4;
+    CTX.strokeText('🌽 萝卜保卫战 🐛', W/2, UI_TOP + 120 + titleFloat);
+    CTX.fillStyle = '#4CAF50';
     CTX.fillText('🌽 萝卜保卫战 🐛', W/2, UI_TOP + 120 + titleFloat);
-    CTX.fillStyle = '#aaa'; CTX.font = '16px Arial';
+    CTX.font = '16px Arial';
+    CTX.strokeStyle = '#0a3a0a';
+    CTX.lineWidth = 2;
+    CTX.strokeText('H5 塔防游戏', W/2, UI_TOP + 160 + titleFloat);
+    CTX.fillStyle = '#aaa';
     CTX.fillText('H5 塔防游戏', W/2, UI_TOP + 160 + titleFloat);
   }
 
@@ -1253,8 +1312,19 @@ function drawMenu() {
   CTX.scale(btnScale, btnScale);
   CTX.translate(-W/2, -(btnY + btnH/2));
   // Always draw button background + text so it's clickable even if image fails
+  // Button shadow
+  CTX.shadowColor = 'rgba(0,0,0,0.5)';
+  CTX.shadowBlur = 16;
+  CTX.shadowOffsetY = 4;
   CTX.fillStyle = '#4CAF50';
   CTX.beginPath(); CTX.roundRect(btnX, btnY, btnW, btnH, 12); CTX.fill();
+  CTX.shadowBlur = 0; CTX.shadowOffsetY = 0;
+  // Gloss highlight on top half
+  const glossGrad = CTX.createLinearGradient(btnX, btnY, btnX, btnY + btnH/2);
+  glossGrad.addColorStop(0, 'rgba(255,255,255,0.35)');
+  glossGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  CTX.fillStyle = glossGrad;
+  CTX.beginPath(); CTX.roundRect(btnX + 2, btnY + 2, btnW - 4, btnH/2 - 2, [10, 10, 0, 0]); CTX.fill();
   drawImg('btn-start', btnX + 10, btnY + 5, btnW - 20, btnH - 10);
   CTX.fillStyle = '#fff'; CTX.font = 'bold 24px Arial'; CTX.textAlign = 'center';
   CTX.fillText('开始游戏', W/2, btnY + 40);
@@ -1285,6 +1355,10 @@ function drawEndScreen(win) {
 // ========== GAME LOOP ==========
 function update(dt) {
   if (gameState !== 'PLAYING') return;
+
+  // Decay screen shake and gold bounce
+  if (screenShake > 0) screenShake = Math.max(0, screenShake - dt);
+  if (goldBounce > 0) goldBounce = Math.max(0, goldBounce - dt * 3);
 
   // Prep timer
   if (prepTimer > 0 && !waveActive) {
@@ -1336,8 +1410,17 @@ function render(dt) {
   // Global animation timer
   menuAnimTime += dt;
 
+  // Screen shake
+  if (screenShake > 0) {
+    CTX.save();
+    const sx = (Math.random() - 0.5) * 6;
+    const sy = (Math.random() - 0.5) * 6;
+    CTX.translate(sx, sy);
+  }
+
   if (gameState === 'MENU') {
     drawMenu();
+    if (screenShake > 0) CTX.restore();
     return;
   }
 
@@ -1383,6 +1466,9 @@ function render(dt) {
 
   // Draw UI
   drawUI();
+
+  // Restore screen shake transform
+  if (screenShake > 0) CTX.restore();
 
   if (gameState === 'WIN') {
     // Spawn fireworks every 0.5 seconds
