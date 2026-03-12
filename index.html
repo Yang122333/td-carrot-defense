@@ -623,8 +623,8 @@ class Tower {
     // Find target based on targetMode
     let target = null;
     const inRange = enemies.filter(e => e.alive && dist(this.x, this.y, e.x, e.y) <= this.range * CELL);
-    if (inRange.length === 0) return;
     
+    if (inRange.length > 0) {
     if (this.targetMode === 'first') {
       let maxIdx = -1;
       for (const e of inRange) {
@@ -654,8 +654,12 @@ class Tower {
       const def = TOWER_DEFS[this.type];
       bullets.push(new Bullet(this.x, this.y, target, this.dmg, this.aoe, this.slow, this.slowDur, def.bulletKey));
       playSound('shoot');
-    } else {
-      // No enemy — attack obstacles
+      return;
+    }
+    } // end if (inRange.length > 0)
+    
+    // No enemy target — attack obstacles
+    {
       let obsTarget = null;
       // Prioritize marked obstacle if in range
       if (markedObstacle && markedObstacle.alive && dist(this.x, this.y, markedObstacle.x, markedObstacle.y) <= this.range * CELL) {
