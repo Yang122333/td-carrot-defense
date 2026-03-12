@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>植物大战虫虫 - 塔防</title>
+<title>萝卜保卫战</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; }
@@ -112,7 +112,7 @@ function isPath(cx, cy) { return PATH_SET.has(cx + ',' + cy); }
 
 // ========== GAME STATE ==========
 let gameState = 'MENU'; // MENU, PLAYING, WIN, LOSE
-let gold = 300, lives = 20, wave = 0, waveActive = false;
+let gold = 180, lives = 10, wave = 0, waveActive = false;
 let prepTimer = 0, prepDuration = 8;
 let enemies = [], towers = [], bullets = [], effects = [], floatTexts = [];
 let spawnQueue = [], spawnTimer = 0;
@@ -136,10 +136,10 @@ const TOWER_DEFS = [
 ];
 
 const ENEMY_DEFS = {
-  caterpillar: { name: '小青虫', hp: 60, speed: 1.0, reward: 10, armor: 0, lifeCost: 1, key: 'caterpillar' },
-  ant: { name: '红蚂蚁', hp: 40, speed: 1.8, reward: 15, armor: 0, lifeCost: 1, key: 'ant' },
-  beetle: { name: '铁甲虫', hp: 200, speed: 0.6, reward: 25, armor: 5, lifeCost: 2, key: 'beetle' },
-  bugking: { name: '虫王', hp: 500, speed: 0.5, reward: 100, armor: 0, lifeCost: 10, key: 'bugking', summon: true }
+  caterpillar: { name: '小青虫', hp: 60, speed: 1.0, reward: 7, armor: 0, lifeCost: 1, key: 'caterpillar' },
+  ant: { name: '红蚂蚁', hp: 40, speed: 1.8, reward: 10, armor: 0, lifeCost: 1, key: 'ant' },
+  beetle: { name: '铁甲虫', hp: 180, speed: 0.7, reward: 17, armor: 5, lifeCost: 2, key: 'beetle' },
+  bugking: { name: '虫王', hp: 800, speed: 0.5, reward: 70, armor: 0, lifeCost: 10, key: 'bugking', summon: true }
 };
 
 const WAVES = [
@@ -200,6 +200,10 @@ class Enemy {
       this.speed = this.baseSpeed * (1 - this.slowAmount);
       if (this.slowTimer <= 0) { this.speed = this.baseSpeed; this.slowAmount = 0; }
     }
+    // Beetle rage when hp < 30%
+    if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
+      this.speed = this.baseSpeed * 2;
+    }
     // Move along path
     if (this.pathIdx >= PATH.length - 1) {
       lives -= this.lifeCost;
@@ -240,35 +244,61 @@ class Enemy {
     }
   }
   takeDamage(dmg, slow, slowDur) {
+    // Ant dodge 20%
+    if (this.type === 'ant' && Math.random() < 0.2) {
+      floatTexts.push({ text: 'Miss!', x: this.x, y: this.y - 10, timer: 0.8, color: '#fff', startX: this.x, startY: this.y - 10, elapsed: 0 });
+      return;
+    }
     const actualDmg = Math.max(1, dmg - this.armor);
     this.hp -= actualDmg;
     this.hitFlash = 0.1;
     if (slow > 0 && slowDur > 0) {
-      if (slow > this.slowAmount) { this.slowAmount = slow; this.slowTimer = slowDur; }
-      else if (slow === this.slowAmount && slowDur > this.slowTimer) { this.slowTimer = slowDur; }
+      // Bugking slow duration halved
+      const finalSlowDur = this.type === 'bugking' ? slowDur * 0.5 : slowDur;
+      if (slow > this.slowAmount) { this.slowAmount = slow; this.slowTimer = finalSlowDur; }
+      else if (slow === this.slowAmount && finalSlowDur > this.slowTimer) { this.slowTimer = finalSlowDur; }
     }
     if (this.hp <= 0) {
       this.alive = false;
       gold += this.reward;
       floatTexts.push({ text: '+' + this.reward, x: this.x, y: this.y, timer: 1.0, color: '#FFD700', startX: this.x, startY: this.y, elapsed: 0 });
-      // Kill particles
-      const count = 3 + Math.floor(Math.random() * 3);
+      // Kill particles - enhanced explosion
+      const count = 8 + Math.floor(Math.random() * 5);
+      const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#95E1D3', '#F38181'];
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const spd = 40 + Math.random() * 60;
-        effects.push({ type: 'killparticle', x: this.x, y: this.y, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd, timer: 0.5 + Math.random() * 0.3, maxTimer: 0.5 + Math.random() * 0.3, radius: 3 + Math.random() * 2, color: this.type === 'caterpillar' ? '#4CAF50' : this.type === 'ant' ? '#f44336' : this.type === 'beetle' ? '#607D8B' : '#9C27B0' });
+        const spd = 60 + Math.random() * 80;
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        effects.push({ type: 'killparticle', x: this.x, y: this.y, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd, timer: 0.6 + Math.random() * 0.4, maxTimer: 0.6 + Math.random() * 0.4, radius: 4 + Math.random() * 3, color });
+      }
+      // Gold coin absorption particles
+      for (let i = 0; i < 3; i++) {
+        const delay = i * 0.1;
+        effects.push({ type: 'goldcoin', x: this.x + (Math.random()-0.5)*20, y: this.y + (Math.random()-0.5)*20, timer: 0.8 + delay, maxTimer: 0.8 + delay, startX: this.x, startY: this.y, targetX: 20, targetY: 20 });
       }
     }
   }
   draw() {
     if (!this.alive) return;
     const size = this.type === 'bugking' ? 40 : 32;
+    // Beetle rage red filter
+    if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
+      CTX.save();
+      CTX.globalCompositeOperation = 'source-over';
+    }
     if (!drawImg(this.key, this.x - size/2, this.y - size/2, size, size)) {
       // Fallback
       CTX.fillStyle = this.type === 'caterpillar' ? '#4CAF50' : this.type === 'ant' ? '#f44336' : this.type === 'beetle' ? '#607D8B' : '#9C27B0';
       CTX.beginPath(); CTX.arc(this.x, this.y, size/2.5, 0, Math.PI*2); CTX.fill();
       CTX.fillStyle = '#fff'; CTX.font = '10px Arial'; CTX.textAlign = 'center';
       CTX.fillText(this.type[0].toUpperCase(), this.x, this.y + 3);
+    }
+    // Beetle rage red overlay
+    if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
+      CTX.globalAlpha = 0.4;
+      CTX.fillStyle = '#ff0000';
+      CTX.beginPath(); CTX.arc(this.x, this.y, size/2, 0, Math.PI*2); CTX.fill();
+      CTX.restore();
     }
     // Hit flash white overlay
     if (this.hitFlash > 0) {
@@ -278,12 +308,22 @@ class Enemy {
       CTX.beginPath(); CTX.arc(this.x, this.y, size/2, 0, Math.PI*2); CTX.fill();
       CTX.restore();
     }
-    // HP bar
+    // HP bar - capsule shape with gradient
     const barW = size * 0.8, barH = 4;
     const barX = this.x - barW / 2, barY = this.y - size / 2 - 6;
-    CTX.fillStyle = '#333'; CTX.fillRect(barX, barY, barW, barH);
-    CTX.fillStyle = this.hp / this.maxHp > 0.5 ? '#4CAF50' : this.hp / this.maxHp > 0.25 ? '#FF9800' : '#f44336';
-    CTX.fillRect(barX, barY, barW * (this.hp / this.maxHp), barH);
+    const hpRatio = this.hp / this.maxHp;
+    CTX.fillStyle = '#333';
+    CTX.beginPath();
+    CTX.roundRect(barX, barY, barW, barH, barH/2);
+    CTX.fill();
+    // HP gradient from green to red
+    const r = Math.floor(244 + (76 - 244) * hpRatio);
+    const g = Math.floor(67 + (175 - 67) * hpRatio);
+    const b = Math.floor(54 + (80 - 54) * hpRatio);
+    CTX.fillStyle = `rgb(${r},${g},${b})`;
+    CTX.beginPath();
+    CTX.roundRect(barX, barY, barW * hpRatio, barH, barH/2);
+    CTX.fill();
     // Slow particles
     if (this.slowTimer > 0) {
       CTX.fillStyle = 'rgba(100, 180, 255, 0.6)';
@@ -316,6 +356,7 @@ class Tower {
     this.totalCost = def.cost;
     this.angle = 0;
     this.placeAnim = 0.3;
+    this.targetMode = 'first'; // 'first', 'strongest', 'weakest', 'last'
   }
   upgrade() {
     const def = TOWER_DEFS[this.type];
@@ -368,23 +409,33 @@ class Tower {
     }
     this.cooldown -= dt;
     if (this.cooldown > 0) return;
-    // Find target
-    let target = null, minDist = Infinity;
-    for (const e of enemies) {
-      if (!e.alive) continue;
-      const d = dist(this.x, this.y, e.x, e.y);
-      if (d <= this.range * CELL && e.pathIdx > (target ? target.pathIdx : -1)) {
-        target = e;
+    // Find target based on targetMode
+    let target = null;
+    const inRange = enemies.filter(e => e.alive && dist(this.x, this.y, e.x, e.y) <= this.range * CELL);
+    if (inRange.length === 0) return;
+    
+    if (this.targetMode === 'first') {
+      let maxIdx = -1;
+      for (const e of inRange) {
+        if (e.pathIdx > maxIdx) { maxIdx = e.pathIdx; target = e; }
+      }
+    } else if (this.targetMode === 'last') {
+      let minIdx = Infinity;
+      for (const e of inRange) {
+        if (e.pathIdx < minIdx) { minIdx = e.pathIdx; target = e; }
+      }
+    } else if (this.targetMode === 'strongest') {
+      let maxHp = 0;
+      for (const e of inRange) {
+        if (e.hp > maxHp) { maxHp = e.hp; target = e; }
+      }
+    } else if (this.targetMode === 'weakest') {
+      let minHp = Infinity;
+      for (const e of inRange) {
+        if (e.hp < minHp) { minHp = e.hp; target = e; }
       }
     }
-    if (!target) {
-      // Fallback: closest
-      for (const e of enemies) {
-        if (!e.alive) continue;
-        const d = dist(this.x, this.y, e.x, e.y);
-        if (d <= this.range * CELL && d < minDist) { minDist = d; target = e; }
-      }
-    }
+    
     if (target) {
       this.cooldown = this.rate;
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
@@ -434,12 +485,16 @@ class Bullet {
     if (!this.target || !this.target.alive) {
       this.alive = false; return;
     }
-    // Trail particle
+    // Enhanced trail - 3-4 particles with shrinking size
     const trailColors = { 'bullet-corn': '#FFD700', 'bullet-ice': '#87CEFA', 'bullet-fire': '#FF4500' };
     this.trailTimer -= dt;
     if (this.trailTimer <= 0) {
-      this.trailTimer = 0.05;
-      effects.push({ type: 'trail', x: this.x, y: this.y, timer: 0.3, maxTimer: 0.3, radius: 3, color: trailColors[this.imgKey] || '#fff' });
+      this.trailTimer = 0.04;
+      for (let i = 0; i < 3; i++) {
+        const delay = i * 0.05;
+        const size = 4 - i * 0.8;
+        effects.push({ type: 'trail', x: this.x, y: this.y, timer: 0.25 - delay, maxTimer: 0.25, radius: size, color: trailColors[this.imgKey] || '#fff' });
+      }
     }
     const dx = this.target.x - this.x, dy = this.target.y - this.y;
     const d = Math.sqrt(dx*dx + dy*dy);
@@ -506,8 +561,8 @@ function checkWaveComplete() {
     gameState = 'WIN';
     return;
   }
-  gold += 50;
-  floatTexts.push({ text: '+50 波次奖励', x: W/2, y: UI_TOP + H/2, timer: 1.5, color: '#FFD700', startX: W/2, startY: UI_TOP + H/2, elapsed: 0 });
+  gold += 35;
+  floatTexts.push({ text: '+35 波次奖励', x: W/2, y: UI_TOP + H/2, timer: 1.5, color: '#FFD700', startX: W/2, startY: UI_TOP + H/2, elapsed: 0 });
   waveClearBanner = { timer: 1.5, maxTimer: 1.5 };
   prepTimer = prepDuration;
 }
@@ -543,7 +598,7 @@ function handleClick(p) {
     const btnX = W/2 - 80, btnY = UI_TOP + H/2 + 40, btnW = 160, btnH = 60;
     if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
       gameState = 'PLAYING';
-      gold = 300; lives = 20; wave = 0; waveActive = false;
+      gold = 180; lives = 10; wave = 0; waveActive = false;
       enemies = []; towers = []; bullets = []; effects = []; floatTexts = [];
       spawnQueue = []; spawnTimer = 0;
       prepTimer = prepDuration;
@@ -561,7 +616,7 @@ function handleClick(p) {
   // UI top bar - next wave button
   if (y < UI_TOP) {
     if (x >= W - 120 && x <= W - 10 && !waveActive && wave < WAVES.length) {
-      if (prepTimer > 0) { gold += 20; floatTexts.push({ text: '+20 跳过', x: W - 65, y: 20, timer: 1.0, color: '#FFD700' }); }
+      if (prepTimer > 0) { gold += 14; floatTexts.push({ text: '+14 跳过', x: W - 65, y: 20, timer: 1.0, color: '#FFD700' }); }
       startWave();
     }
     selectedPlaced = null;
@@ -598,17 +653,24 @@ function handleClick(p) {
   // Handle upgrade/sell panel clicks
   if (selectedPlaced) {
     const pp = cellToPixel(selectedPlaced.gx, selectedPlaced.gy);
-    const panelX = Math.max(0, Math.min(pp.x - 60, W - 130)), panelY = pp.y - 65;
+    const panelX = Math.max(0, Math.min(pp.x - 60, W - 130)), panelY = pp.y - 90;
+    // Target mode button
+    if (!selectedPlaced.mine && x >= panelX + 3 && x <= panelX + 127 && y >= panelY + 32 && y <= panelY + 48) {
+      const modes = ['first', 'strongest', 'weakest', 'last'];
+      const idx = modes.indexOf(selectedPlaced.targetMode);
+      selectedPlaced.targetMode = modes[(idx + 1) % modes.length];
+      return;
+    }
     // Upgrade button
     if (!selectedPlaced.mine && selectedPlaced.level < 2) {
-      if (x >= panelX + 3 && x <= panelX + 61 && y >= panelY + 30 && y <= panelY + 50) {
+      if (x >= panelX + 3 && x <= panelX + 61 && y >= panelY + 52 && y <= panelY + 72) {
         selectedPlaced.upgrade();
         selectedPlaced = null;
         return;
       }
     }
     // Sell button
-    if (x >= panelX + 65 && x <= panelX + 123 && y >= panelY + 30 && y <= panelY + 50) {
+    if (x >= panelX + 65 && x <= panelX + 123 && y >= panelY + 52 && y <= panelY + 72) {
       selectedPlaced.sell();
       selectedPlaced = null;
       return;
@@ -630,45 +692,74 @@ function handleClick(p) {
   selectedTower = -1;
 }
 
-// ========== DRAWING ==========
+// ========== DECORATIONS (generated once) ==========
+const DECORATIONS = [];
+(function buildDecorations() {
+  const rng = (seed) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) & 0xFFFFFFFF; return (s >>> 0) / 0xFFFFFFFF; }; };
+  const rand = rng(42);
+  for (let gx = 0; gx < COLS; gx++) {
+    for (let gy = 0; gy < ROWS; gy++) {
+      if (isPath(gx, gy)) continue;
+      if (rand() < 0.18) {
+        const type = rand() < 0.5 ? 'flower' : 'rock';
+        const ox = (rand() - 0.5) * CELL * 0.5;
+        const oy = (rand() - 0.5) * CELL * 0.5;
+        const hue = Math.floor(rand() * 360);
+        DECORATIONS.push({ gx, gy, type, ox, oy, hue });
+      }
+    }
+  }
+})();
+
 function drawMap() {
-  // Background - grass with pseudo-random variation
+  // Background - deep green base
+  CTX.fillStyle = '#228B22';
+  CTX.fillRect(0, UI_TOP, W, H);
+  // Light green blotches
   for (let gx = 0; gx < COLS; gx++) {
     for (let gy = 0; gy < ROWS; gy++) {
       if (isPath(gx, gy)) continue;
       const hash = ((gx * 7 + gy * 13 + gx * gy * 3) & 0xFF) / 255;
-      const g = Math.floor(80 + hash * 30);
-      const r = Math.floor(30 + hash * 20);
-      const b = Math.floor(15 + hash * 15);
-      CTX.fillStyle = `rgb(${r},${g},${b})`;
-      CTX.fillRect(gx * CELL, gy * CELL + UI_TOP, CELL, CELL);
+      if (hash > 0.55) {
+        CTX.fillStyle = `rgba(144,238,90,${0.15 + hash * 0.2})`;
+        CTX.fillRect(gx * CELL, gy * CELL + UI_TOP, CELL, CELL);
+      }
     }
   }
 
-  // Grid
-  CTX.strokeStyle = 'rgba(0,0,0,0.1)';
-  CTX.lineWidth = 0.5;
-  for (let x = 0; x <= COLS; x++) {
-    CTX.beginPath(); CTX.moveTo(x*CELL, UI_TOP); CTX.lineTo(x*CELL, UI_TOP+H); CTX.stroke();
-  }
-  for (let y = 0; y <= ROWS; y++) {
-    CTX.beginPath(); CTX.moveTo(0, y*CELL+UI_TOP); CTX.lineTo(W, y*CELL+UI_TOP); CTX.stroke();
+  // Hover highlight (no grid lines)
+  if (mouseGX >= 0 && mouseGX < COLS && mouseGY >= 0 && mouseGY < ROWS && !isPath(mouseGX, mouseGY)) {
+    CTX.fillStyle = 'rgba(255,255,255,0.15)';
+    CTX.fillRect(mouseGX * CELL, mouseGY * CELL + UI_TOP, CELL, CELL);
   }
 
-  // Path with pseudo-random earth tone variation
-  for (const p of PATH) {
-    const hash = ((p.x * 11 + p.y * 17 + p.x * p.y * 5) & 0xFF) / 255;
-    const r = Math.floor(180 + hash * 20);
-    const g = Math.floor(150 + hash * 18);
-    const b = Math.floor(75 + hash * 20);
-    CTX.fillStyle = `rgb(${r},${g},${b})`;
-    CTX.fillRect(p.x * CELL + 1, p.y * CELL + UI_TOP + 1, CELL - 2, CELL - 2);
+  // Decorations (flowers and rocks on non-path cells)
+  for (const d of DECORATIONS) {
+    const hasTower = towers.some(t => t.gx === d.gx && t.gy === d.gy);
+    if (hasTower) continue;
+    const cx = d.gx * CELL + CELL/2 + d.ox;
+    const cy = d.gy * CELL + CELL/2 + UI_TOP + d.oy;
+    if (d.type === 'flower') {
+      CTX.fillStyle = `hsl(${d.hue},80%,65%)`;
+      CTX.beginPath(); CTX.arc(cx, cy, 3, 0, Math.PI*2); CTX.fill();
+      CTX.fillStyle = '#fff';
+      CTX.beginPath(); CTX.arc(cx, cy, 1.5, 0, Math.PI*2); CTX.fill();
+    } else {
+      CTX.fillStyle = 'rgba(120,120,120,0.7)';
+      CTX.beginPath(); CTX.ellipse(cx, cy, 5, 3, 0.3, 0, Math.PI*2); CTX.fill();
+    }
   }
-  // Path border
-  CTX.strokeStyle = '#a08030';
-  CTX.lineWidth = 1;
+
+  // Path with gradient earth tone
   for (const p of PATH) {
-    CTX.strokeRect(p.x * CELL + 1, p.y * CELL + UI_TOP + 1, CELL - 2, CELL - 2);
+    const px = p.x * CELL, py = p.y * CELL + UI_TOP;
+    const grad = CTX.createLinearGradient(px, py, px + CELL, py + CELL);
+    grad.addColorStop(0, '#D2B48C');
+    grad.addColorStop(1, '#F5DEB3');
+    CTX.fillStyle = grad;
+    CTX.beginPath();
+    CTX.roundRect(px + 1, py + 1, CELL - 2, CELL - 2, 4);
+    CTX.fill();
   }
 
   // Entrance
@@ -784,33 +875,42 @@ function drawUI() {
   if (selectedPlaced) {
     const pp = cellToPixel(selectedPlaced.gx, selectedPlaced.gy);
     const panelX = Math.max(0, Math.min(pp.x - 60, W - 130));
-    const panelY = pp.y - 65;
+    const panelY = pp.y - 90;
     const def = TOWER_DEFS[selectedPlaced.type];
 
     CTX.fillStyle = 'rgba(0,0,0,0.85)';
-    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 55, 6); CTX.fill();
+    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.fill();
     CTX.strokeStyle = '#888'; CTX.lineWidth = 1;
-    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 55, 6); CTX.stroke();
+    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.stroke();
 
     // Info
     CTX.fillStyle = '#fff'; CTX.font = '10px Arial'; CTX.textAlign = 'left';
     CTX.fillText(def.name + ' Lv' + selectedPlaced.level, panelX + 5, panelY + 14);
     CTX.fillText('DMG:' + selectedPlaced.dmg + ' SPD:' + (selectedPlaced.rate||'--'), panelX + 5, panelY + 26);
 
+    // Target mode button (only for non-mine towers)
+    if (!selectedPlaced.mine) {
+      const modeNames = { first: '最前', last: '最后', strongest: '最强', weakest: '最弱' };
+      CTX.fillStyle = '#2196F3';
+      CTX.beginPath(); CTX.roundRect(panelX + 3, panelY + 32, 124, 16, 3); CTX.fill();
+      CTX.fillStyle = '#fff'; CTX.font = '9px Arial'; CTX.textAlign = 'center';
+      CTX.fillText('目标:' + modeNames[selectedPlaced.targetMode], panelX + 65, panelY + 43);
+    }
+
     // Upgrade button
     if (!selectedPlaced.mine && selectedPlaced.level < 2) {
       CTX.fillStyle = gold >= def.upCost ? '#4CAF50' : '#666';
-      CTX.beginPath(); CTX.roundRect(panelX + 3, panelY + 30, 58, 20, 4); CTX.fill();
+      CTX.beginPath(); CTX.roundRect(panelX + 3, panelY + 52, 58, 20, 4); CTX.fill();
       CTX.fillStyle = '#fff'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
-      CTX.fillText('升级' + def.upCost, panelX + 32, panelY + 44);
+      CTX.fillText('升级' + def.upCost, panelX + 32, panelY + 66);
     }
 
     // Sell button
     const sellVal = Math.floor(selectedPlaced.totalCost * 0.5);
     CTX.fillStyle = '#f44336';
-    CTX.beginPath(); CTX.roundRect(panelX + 65, panelY + 30, 58, 20, 4); CTX.fill();
+    CTX.beginPath(); CTX.roundRect(panelX + 65, panelY + 52, 58, 20, 4); CTX.fill();
     CTX.fillStyle = '#fff'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
-    CTX.fillText('卖' + sellVal, panelX + 94, panelY + 44);
+    CTX.fillText('卖' + sellVal, panelX + 94, panelY + 66);
 
     // Range circle
     CTX.strokeStyle = 'rgba(255,255,255,0.25)'; CTX.lineWidth = 1;
@@ -854,6 +954,28 @@ function drawEffects(dt) {
       CTX.globalAlpha = life;
       CTX.fillStyle = e.color;
       CTX.beginPath(); CTX.arc(e.x, e.y, e.radius * life, 0, Math.PI * 2); CTX.fill();
+      CTX.globalAlpha = 1;
+    } else if (e.type === 'goldcoin') {
+      const elapsed = e.maxTimer - e.timer;
+      const progress = elapsed / e.maxTimer;
+      // Bounce out then fly to target
+      if (progress < 0.2) {
+        const bounceProgress = progress / 0.2;
+        const bounceHeight = 30 * Math.sin(bounceProgress * Math.PI);
+        e.x = e.startX;
+        e.y = e.startY - bounceHeight;
+      } else {
+        const flyProgress = (progress - 0.2) / 0.8;
+        const easeProgress = 1 - Math.pow(1 - flyProgress, 3);
+        e.x = e.startX + (e.targetX - e.startX) * easeProgress;
+        e.y = e.startY + (e.targetY - e.startY) * easeProgress;
+      }
+      CTX.globalAlpha = Math.min(1, e.timer * 2);
+      CTX.fillStyle = '#FFD700';
+      CTX.beginPath(); CTX.arc(e.x, e.y, 5, 0, Math.PI * 2); CTX.fill();
+      CTX.strokeStyle = '#FFA500';
+      CTX.lineWidth = 1;
+      CTX.beginPath(); CTX.arc(e.x, e.y, 5, 0, Math.PI * 2); CTX.stroke();
       CTX.globalAlpha = 1;
     }
   }
