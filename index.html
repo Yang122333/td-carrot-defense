@@ -223,10 +223,10 @@ const OBSTACLE_TYPES = {
 const OBSTACLE_DEFS = OBSTACLE_TYPES;
 
 const OBSTACLE_MAP = [
-  {col:2, row:2, type:'bush'},  {col:5, row:1, type:'rock'},
-  {col:8, row:3, type:'chest'}, {col:12, row:2, type:'stump'},
-  {col:3, row:8, type:'shroom'},{col:10, row:7, type:'bush'},
-  {col:14, row:4, type:'rock'}, {col:7, row:9, type:'chest'},
+  {col:2, row:2, type:'bush'},  {col:5, row:2, type:'rock'},
+  {col:8, row:2, type:'chest'}, {col:12, row:2, type:'stump'},
+  {col:3, row:8, type:'shroom'},{col:10, row:6, type:'bush'},
+  {col:14, row:4, type:'rock'}, {col:7, row:8, type:'chest'},
   {col:1, row:5, type:'stump'}, {col:13, row:8, type:'shroom'}
 ];
 // Alias for backward-compat with initObstacles
@@ -394,7 +394,9 @@ class Enemy {
     }
     // Beetle rage when hp < 30%
     if (this.type === 'beetle' && this.hp / this.maxHp < 0.3) {
-      this.speed = this.baseSpeed * 2;
+      // Apply rage on top of any slow effect
+      const rageBase = this.slowTimer > 0 ? this.baseSpeed * (1 - this.slowAmount) : this.baseSpeed;
+      this.speed = rageBase * 2;
     }
     // Move along path
     if (this.pathIdx >= PATH.length - 1) {
@@ -855,7 +857,7 @@ function handleClick(p) {
       selectedTower = -1; selectedPlaced = null;
       markedObstacle = null;
       waveClearBanner = null;
-      totalKills = 0; carrotFlash = 0; carrotShake = 0;
+      totalKills = 0; carrotFlash = 0; carrotShake = 0; fireworkTimer = 0;
       initObstacles();
     }
     return;
@@ -1910,7 +1912,7 @@ function drawEndScreen(win) {
     CTX.strokeStyle = `rgba(255,80,80,${redAlpha * 0.5})`; CTX.lineWidth = 4;
     CTX.strokeRect(12, 12, W - 24, TOTAL_H - 24);
     // Dark gray panel
-    const panW = 280, panH = 180;
+    const panW = 280, panH = 210;
     const panX = W/2 - panW/2, panY = TOTAL_H/2 - panH/2;
     const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
     panGrad.addColorStop(0, '#2a2a2a');
@@ -1926,12 +1928,12 @@ function drawEndScreen(win) {
     CTX.fillStyle = '#FF5252';
     CTX.fillText('💀 萝卜被偷走了...', W/2, panY + 50);
     // Wave info
-    CTX.font = '18px Arial'; CTX.fillStyle = '#ccc';
-    CTX.strokeStyle = '#300'; CTX.lineWidth = 2;
-    CTX.strokeText('坚持到第 ' + wave + ' / ' + WAVES.length + ' 波', W/2, panY + 90);
-    CTX.fillText('坚持到第 ' + wave + ' / ' + WAVES.length + ' 波', W/2, panY + 90);
-    CTX.font = '14px Arial'; CTX.fillStyle = '#999';
-    CTX.fillText('击杀了 ' + totalKills + ' 只害虫', W/2, panY + 118);
+    CTX.font = '14px Arial'; CTX.fillStyle = '#ccc'; CTX.textAlign = 'left';
+    CTX.fillText('⚔️ 击杀: ' + totalKills, panX + 20, panY + 84);
+    CTX.fillText('❤️ 剩余生命: ' + lives, panX + 20, panY + 106);
+    CTX.fillText('💰 剩余金币: ' + gold, panX + 20, panY + 128);
+    CTX.textAlign = 'center'; CTX.fillStyle = '#888'; CTX.font = '13px Arial';
+    CTX.fillText('坚持到第 ' + wave + ' / ' + WAVES.length + ' 波', W/2, panY + 148);
     // "重新挑战" button
     const btnX = W/2 - 80, btnY = panY + panH - 52, btnW = 160, btnH = 40;
     const btnScale = 1 + 0.04 * Math.sin(menuAnimTime * 4);
