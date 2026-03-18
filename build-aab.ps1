@@ -49,32 +49,63 @@ Write-Ok "Project dir: $PROJECT_DIR"
 $unityBuildGradle = "$PROJECT_DIR\unityLibrary\build.gradle"
 if (Test-Path $unityBuildGradle) {
     Write-Step "Patching unityLibrary/build.gradle (disable IL2CPP tasks)..."
-    $ubContent = Get-Content $unityBuildGradle -Raw
-
-    # Comment out the BuildIl2CppTask block and its afterEvaluate + sourceSets references
-    $patterns = @(
-        # task BuildIl2CppTask { ... }
-        '(?s)(task\s+BuildIl2CppTask\s*\{.*?\n\s*\})',
-        # afterEvaluate block that references BuildIl2CppTask
-        '(?s)(afterEvaluate\s*\{[^}]*BuildIl2CppTask[^}]*\})',
-        # sourceSets with Il2CppOutputProject
-        '(?s)(sourceSets\s*\{[^}]*Il2CppOutputProject[^}]*\}\s*\})'
-    )
-
+    $lines = Get-Content $unityBuildGradle
     $patched = $false
-    foreach ($pat in $patterns) {
-        if ($ubContent -match $pat) {
-            $ubContent = [regex]::Replace($ubContent, $pat, {
-                param($m)
-                $lines = $m.Value -split "`n"
-                ($lines | ForEach-Object { "// [DISABLED] $_" }) -join "`n"
-            })
-            $patched = $true
+
+    # Comment out entire blocks: def BuildIl2Cpp function, BuildIl2CppTask,
+    # afterEvaluate referencing BuildIl2CppTask, sourceSets with Il2CppOutputProject
+    $inBlock = $false
+    $braceDepth = 0
+    $blockStartKeywords = @("def BuildIl2Cpp", "task BuildIl2CppTask")
+    $blockStartLine = -1
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+
+        if (-not $inBlock) {
+            # Check if this line starts a block we want to disable
+            $startBlock = $false
+            foreach ($kw in $blockStartKeywords) {
+                if ($line -match [regex]::Escape($kw)) { $startBlock = $true; break }
+            }
+            # Also catch afterEvaluate that references BuildIl2CppTask (look ahead)
+            if (-not $startBlock -and $line -match 'afterEvaluate\s*\{') {
+                $lookAhead = ($lines[$i..([Math]::Min($i+10, $lines.Count-1))]) -join "`n"
+                if ($lookAhead -match 'BuildIl2CppTask') { $startBlock = $true }
+            }
+            # Also catch sourceSets with Il2CppOutputProject
+            if (-not $startBlock -and $line -match 'sourceSets\s*\{') {
+                $lookAhead = ($lines[$i..([Math]::Min($i+10, $lines.Count-1))]) -join "`n"
+                if ($lookAhead -match 'Il2CppOutputProject') { $startBlock = $true }
+            }
+
+            if ($startBlock) {
+                $inBlock = $true
+                $braceDepth = 0
+                $blockStartLine = $i
+            }
+        }
+
+        if ($inBlock) {
+            # Count braces
+            foreach ($ch in $line.ToCharArray()) {
+                if ($ch -eq '{') { $braceDepth++ }
+                elseif ($ch -eq '}') { $braceDepth-- }
+            }
+            # Comment out this line
+            if ($line -notmatch '^\s*//') {
+                $lines[$i] = "// [DISABLED] $line"
+                $patched = $true
+            }
+            # Block ends when braces balance back to 0 (and we opened at least one)
+            if ($braceDepth -le 0 -and $i -gt $blockStartLine) {
+                $inBlock = $false
+            }
         }
     }
 
     if ($patched) {
-        Set-Content $unityBuildGradle $ubContent -Encoding UTF8
+        Set-Content $unityBuildGradle $lines -Encoding UTF8
         Write-Ok "IL2CPP build tasks commented out"
     } else {
         Write-Skip "No IL2CPP tasks found to patch"
