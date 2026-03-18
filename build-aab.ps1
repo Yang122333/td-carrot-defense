@@ -45,6 +45,44 @@ if ($subDirs.Count -eq 1 -and -not (Test-Path "$PROJECT_DIR\build.gradle") -and 
 }
 Write-Ok "Project dir: $PROJECT_DIR"
 
+# ===== 1b. Patch unityLibrary/build.gradle - disable IL2CPP build tasks =====
+$unityBuildGradle = "$PROJECT_DIR\unityLibrary\build.gradle"
+if (Test-Path $unityBuildGradle) {
+    Write-Step "Patching unityLibrary/build.gradle (disable IL2CPP tasks)..."
+    $ubContent = Get-Content $unityBuildGradle -Raw
+
+    # Comment out the BuildIl2CppTask block and its afterEvaluate + sourceSets references
+    $patterns = @(
+        # task BuildIl2CppTask { ... }
+        '(?s)(task\s+BuildIl2CppTask\s*\{.*?\n\s*\})',
+        # afterEvaluate block that references BuildIl2CppTask
+        '(?s)(afterEvaluate\s*\{[^}]*BuildIl2CppTask[^}]*\})',
+        # sourceSets with Il2CppOutputProject
+        '(?s)(sourceSets\s*\{[^}]*Il2CppOutputProject[^}]*\}\s*\})'
+    )
+
+    $patched = $false
+    foreach ($pat in $patterns) {
+        if ($ubContent -match $pat) {
+            $ubContent = [regex]::Replace($ubContent, $pat, {
+                param($m)
+                $lines = $m.Value -split "`n"
+                ($lines | ForEach-Object { "// [DISABLED] $_" }) -join "`n"
+            })
+            $patched = $true
+        }
+    }
+
+    if ($patched) {
+        Set-Content $unityBuildGradle $ubContent -Encoding UTF8
+        Write-Ok "IL2CPP build tasks commented out"
+    } else {
+        Write-Skip "No IL2CPP tasks found to patch"
+    }
+} else {
+    Write-Skip "No unityLibrary/build.gradle found"
+}
+
 # ===== 2. Detect project structure =====
 Write-Step "Detecting project structure..."
 
@@ -254,25 +292,13 @@ $keystorePath = "$PROJECT_DIR\release.keystore"
 $keytool = "$env:JAVA_HOME\bin\keytool.exe"
 if (-not (Test-Path $keytool)) { $keytool = "keytool" }
 
-if (Test-Path $keystorePath) {
-    Write-Host "    Found existing release.keystore" -ForegroundColor Yellow
-    $useExisting = Read-Host "    Use existing keystore? (Y/N)"
-    if ($useExisting -eq "Y" -or $useExisting -eq "y") {
-        $storePass = Read-Host "    Keystore password"
-        $keyAlias = Read-Host "    Key alias"
-        $keyPass = Read-Host "    Key password (Enter if same as keystore)"
-        if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
-    } else {
-        Remove-Item $keystorePath -Force
-    }
-}
+if (Test-Path $keystorePath) { Remove-Item $keystorePath -Force }
 
-if (-not (Test-Path $keystorePath)) {
-    Write-Host "    Creating new keystore..." -ForegroundColor White
-    $storePass = Read-Host "    Keystore password (min 6 chars)"
-    $keyAlias = Read-Host "    Key alias (e.g. mykey)"
-    $keyPass = Read-Host "    Key password (Enter if same as keystore)"
-    if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
+Write-Host "    Creating new signing keystore..." -ForegroundColor White
+$storePass = Read-Host "    Keystore password (min 6 chars)"
+$keyAlias = Read-Host "    Key alias (e.g. mykey)"
+$keyPass = Read-Host "    Key password (Enter if same as keystore)"
+if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
     $cnName = Read-Host "    Your name (CN)"
     $org = Read-Host "    Organization (O, or press Enter to skip)"
     $country = Read-Host "    Country code (C, e.g. CN)"
@@ -297,7 +323,6 @@ if (-not (Test-Path $keystorePath)) {
         exit 1
     }
     Write-Ok "Keystore created: $keystorePath"
-}
 
 # ===== 8. Inject signing config into build.gradle =====
 Write-Step "Injecting signing config..."
