@@ -1,4 +1,4 @@
-# ===== Android AAB Build Script =====
+# ===== Android AAB Build Script (Unity Project) =====
 # Usage: powershell -ExecutionPolicy Bypass -File .\build-aab.ps1
 # Put this script in the same folder as your project .zip file
 
@@ -38,65 +38,98 @@ New-Item -ItemType Directory -Force -Path $PROJECT_DIR | Out-Null
 Write-Step "Extracting project..."
 Expand-Archive -Path $zipFile -DestinationPath $PROJECT_DIR -Force
 
-$subDirs = Get-ChildItem -Path $PROJECT_DIR -Directory
-if ($subDirs.Count -eq 1 -and -not (Test-Path "$PROJECT_DIR\build.gradle*") -and -not (Test-Path "$PROJECT_DIR\gradlew.bat")) {
+# Navigate into the single subfolder if needed
+$subDirs = Get-ChildItem -Path $PROJECT_DIR -Directory | Where-Object { $_.Name -ne "__MACOSX" }
+if ($subDirs.Count -eq 1 -and -not (Test-Path "$PROJECT_DIR\build.gradle") -and -not (Test-Path "$PROJECT_DIR\gradlew.bat")) {
     $PROJECT_DIR = $subDirs[0].FullName
 }
 Write-Ok "Project dir: $PROJECT_DIR"
 
-# ===== 2. Read project config =====
-Write-Step "Reading project config..."
+# ===== 2. Detect project structure =====
+Write-Step "Detecting project structure..."
 
+# Find the app module (could be app/, launcher/, etc.)
+$appModule = $null
 $appBuildGradle = $null
-$gradleFiles = @("$PROJECT_DIR\app\build.gradle", "$PROJECT_DIR\app\build.gradle.kts")
-foreach ($f in $gradleFiles) {
-    if (Test-Path $f) { $appBuildGradle = Get-Content $f -Raw; break }
+foreach ($candidate in @("launcher", "app")) {
+    $gFile = "$PROJECT_DIR\$candidate\build.gradle"
+    $gFileKts = "$PROJECT_DIR\$candidate\build.gradle.kts"
+    if (Test-Path $gFile) {
+        $content = Get-Content $gFile -Raw
+        if ($content -match "com\.android\.application") {
+            $appModule = $candidate
+            $appBuildGradle = $content
+            break
+        }
+    }
+    if (Test-Path $gFileKts) {
+        $content = Get-Content $gFileKts -Raw
+        if ($content -match "com\.android\.application") {
+            $appModule = $candidate
+            $appBuildGradle = $content
+            break
+        }
+    }
 }
-if (-not $appBuildGradle) {
-    Write-Err "Cannot find app/build.gradle - check project structure"
-    Write-Host "Project dir contents:" -ForegroundColor Yellow
+
+# Fallback: scan all subdirs for the application plugin
+if (-not $appModule) {
+    $dirs = Get-ChildItem -Path $PROJECT_DIR -Directory
+    foreach ($d in $dirs) {
+        $gFile = "$($d.FullName)\build.gradle"
+        if (Test-Path $gFile) {
+            $content = Get-Content $gFile -Raw
+            if ($content -match "com\.android\.application") {
+                $appModule = $d.Name
+                $appBuildGradle = $content
+                break
+            }
+        }
+    }
+}
+
+if (-not $appModule) {
+    Write-Err "Cannot find application module. Directory contents:"
     Get-ChildItem $PROJECT_DIR | ForEach-Object { Write-Host "  $_" }
     Read-Host "Press Enter to exit"
     exit 1
 }
+Write-Ok "App module: $appModule"
+
+# ===== 3. Read project config =====
+Write-Step "Reading project config..."
 
 $compileSdk = 34
 if ($appBuildGradle -match 'compileSdk[Vv]ersion?\s*[=:]\s*(\d+)') { $compileSdk = $Matches[1] }
 elseif ($appBuildGradle -match 'compileSdk\s*[=:]\s*(\d+)') { $compileSdk = $Matches[1] }
 
 $buildTools = "$compileSdk.0.0"
-if ($appBuildGradle -match "buildToolsVersion\s*[=:]\s*[`"']([^`"']+)") { $buildTools = $Matches[1] }
+if ($appBuildGradle -match "buildToolsVersion\s*[=:]*\s*[`"']([^`"']+)") { $buildTools = $Matches[1] }
 
 $minSdk = ""; $targetSdk = ""
-if ($appBuildGradle -match 'minSdk[Vv]ersion?\s*[=:]\s*(\d+)') { $minSdk = $Matches[1] }
-elseif ($appBuildGradle -match 'minSdk\s*[=:]\s*(\d+)') { $minSdk = $Matches[1] }
-if ($appBuildGradle -match 'targetSdk[Vv]ersion?\s*[=:]\s*(\d+)') { $targetSdk = $Matches[1] }
-elseif ($appBuildGradle -match 'targetSdk\s*[=:]\s*(\d+)') { $targetSdk = $Matches[1] }
+if ($appBuildGradle -match 'minSdk[Vv]ersion?\s*(\d+)') { $minSdk = $Matches[1] }
+if ($appBuildGradle -match 'targetSdk[Vv]ersion?\s*(\d+)') { $targetSdk = $Matches[1] }
 
-$gradleVersion = "8.2"
+# Detect JDK version from JavaVersion.VERSION_XX
+$jdkVersion = 17
+if ($appBuildGradle -match 'JavaVersion\.VERSION_(\d+)') { $jdkVersion = [int]$Matches[1] }
+
+$gradleVersion = "8.7"
 $wrapperProps = "$PROJECT_DIR\gradle\wrapper\gradle-wrapper.properties"
 if (Test-Path $wrapperProps) {
-    $wrapperContent = Get-Content $wrapperProps -Raw
-    if ($wrapperContent -match 'gradle-(\d+\.\d+(\.\d+)?)-') { $gradleVersion = $Matches[1] }
+    $wc = Get-Content $wrapperProps -Raw
+    if ($wc -match 'gradle-(\d+\.\d+(\.\d+)?)-') { $gradleVersion = $Matches[1] }
 }
 
-$jdkVersion = 18
-$gradleProps = "$PROJECT_DIR\gradle.properties"
-if (Test-Path $gradleProps) {
-    $gp = Get-Content $gradleProps -Raw
-    if ($gp -match 'JavaVersion\.VERSION_(\d+)') { $jdkVersion = [int]$Matches[1] }
-    elseif ($gp -match 'jdk.*?(\d{2})') { $jdkVersion = [int]$Matches[1] }
-}
+Write-Host "    Config:" -ForegroundColor White
+Write-Host "      compileSdk:     $compileSdk"
+Write-Host "      buildTools:     $buildTools"
+Write-Host "      minSdk:         $minSdk"
+Write-Host "      targetSdk:      $targetSdk"
+Write-Host "      Gradle:         $gradleVersion"
+Write-Host "      JDK needed:     $jdkVersion"
 
-Write-Host "    Config detected:" -ForegroundColor White
-Write-Host "      compileSdk:        $compileSdk"
-Write-Host "      buildToolsVersion: $buildTools"
-Write-Host "      minSdk:            $minSdk"
-Write-Host "      targetSdk:         $targetSdk"
-Write-Host "      Gradle:            $gradleVersion"
-Write-Host "      JDK:               $jdkVersion"
-
-# ===== 3. Check / Install JDK =====
+# ===== 4. Check / Install JDK =====
 Write-Step "Checking JDK..."
 
 $javaOk = $false
@@ -107,6 +140,8 @@ try {
         if ($existingMajor -ge $jdkVersion) {
             Write-Skip "JDK $existingMajor found (need >= $jdkVersion)"
             $javaOk = $true
+        } else {
+            Write-Host "    JDK $existingMajor found but need >= $jdkVersion" -ForegroundColor Yellow
         }
     }
 } catch {}
@@ -116,21 +151,27 @@ if (-not $javaOk) {
     New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
 
     $jdkUrls = @{
+        11 = "https://download.oracle.com/java/11/archive/jdk-11.0.24_windows-x64_bin.zip"
         17 = "https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.zip"
         18 = "https://download.oracle.com/java/18/archive/jdk-18.0.2.1_windows-x64_bin.zip"
         21 = "https://download.oracle.com/java/21/latest/jdk-21_windows-x64_bin.zip"
     }
 
-    if ($jdkUrls.ContainsKey($jdkVersion)) {
+    # For JDK 11, Oracle requires login. Use Adoptium instead.
+    if ($jdkVersion -le 11) {
+        $jdkUrl = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.12_7.zip"
+        $jdkVersion = 17
+        Write-Host "    JDK 11 requested but using JDK 17 (backward compatible)" -ForegroundColor Yellow
+    } elseif ($jdkUrls.ContainsKey($jdkVersion)) {
         $jdkUrl = $jdkUrls[$jdkVersion]
     } else {
-        Write-Host "    No preset URL for JDK $jdkVersion, trying JDK 21..." -ForegroundColor Yellow
-        $jdkUrl = $jdkUrls[21]
-        $jdkVersion = 21
+        $jdkUrl = $jdkUrls[17]
+        $jdkVersion = 17
+        Write-Host "    No preset URL for requested JDK, using JDK 17" -ForegroundColor Yellow
     }
 
     $jdkZip = "$TOOLS_DIR\jdk.zip"
-    Write-Host "    Downloading... (may take a few minutes)" -ForegroundColor White
+    Write-Host "    Downloading JDK... (may take a few minutes)" -ForegroundColor White
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $jdkUrl -OutFile $jdkZip -UseBasicParsing
     Write-Host "    Extracting JDK..." -ForegroundColor White
@@ -146,16 +187,16 @@ if (-not $javaOk) {
     }
 }
 
-# ===== 4. Check / Install Android SDK =====
+# ===== 5. Check / Install Android SDK =====
 Write-Step "Checking Android SDK..."
 
 $sdkOk = $false
 if ($env:ANDROID_HOME -and (Test-Path "$env:ANDROID_HOME\cmdline-tools")) {
     Write-Skip "ANDROID_HOME found: $env:ANDROID_HOME"
     $sdkOk = $true
-} elseif ($env:ANDROID_SDK_ROOT -and (Test-Path "$env:ANDROID_SDK_ROOT\cmdline-tools")) {
+} elseif ($env:ANDROID_SDK_ROOT -and (Test-Path "$env:ANDROID_SDK_ROOT")) {
     $env:ANDROID_HOME = $env:ANDROID_SDK_ROOT
-    Write-Skip "ANDROID_SDK_ROOT found: $env:ANDROID_HOME"
+    Write-Skip "ANDROID_SDK_ROOT found: $env:ANDROID_SDK_ROOT"
     $sdkOk = $true
 }
 
@@ -163,181 +204,206 @@ if (-not $sdkOk) {
     Write-Host "    Installing Android SDK..." -ForegroundColor White
     New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
 
-    $ANDROID_HOME_PATH = "$TOOLS_DIR\android-sdk"
-    New-Item -ItemType Directory -Force -Path "$ANDROID_HOME_PATH\cmdline-tools" | Out-Null
+    $sdkDir = "$TOOLS_DIR\android-sdk"
+    New-Item -ItemType Directory -Force -Path "$sdkDir\cmdline-tools" | Out-Null
 
     $cmdToolsUrl = "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip"
     $cmdToolsZip = "$TOOLS_DIR\cmdline-tools.zip"
     Write-Host "    Downloading SDK command-line tools..." -ForegroundColor White
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $cmdToolsUrl -OutFile $cmdToolsZip -UseBasicParsing
-    Expand-Archive $cmdToolsZip -DestinationPath "$ANDROID_HOME_PATH\cmdline-tools" -Force
+    Expand-Archive $cmdToolsZip -DestinationPath "$sdkDir\cmdline-tools" -Force
 
-    $extracted = Get-ChildItem "$ANDROID_HOME_PATH\cmdline-tools" -Directory | Where-Object { $_.Name -ne "latest" } | Select-Object -First 1
-    if ($extracted -and $extracted.Name -ne "latest") {
-        if (Test-Path "$ANDROID_HOME_PATH\cmdline-tools\latest") {
-            Remove-Item -Recurse -Force "$ANDROID_HOME_PATH\cmdline-tools\latest"
-        }
-        Rename-Item $extracted.FullName "latest"
+    $extractedDir = "$sdkDir\cmdline-tools\cmdline-tools"
+    $latestDir = "$sdkDir\cmdline-tools\latest"
+    if (Test-Path $extractedDir) {
+        if (Test-Path $latestDir) { Remove-Item -Recurse -Force $latestDir }
+        Rename-Item $extractedDir "latest"
     }
 
-    $env:ANDROID_HOME = $ANDROID_HOME_PATH
-    $env:PATH = "$ANDROID_HOME_PATH\cmdline-tools\latest\bin;$ANDROID_HOME_PATH\platform-tools;$env:PATH"
+    $env:ANDROID_HOME = $sdkDir
+    $env:PATH = "$sdkDir\cmdline-tools\latest\bin;$sdkDir\platform-tools;$env:PATH"
 
     Write-Host "    Accepting licenses..." -ForegroundColor White
     $yesInput = ("y`n" * 30)
-    $yesInput | & "$ANDROID_HOME_PATH\cmdline-tools\latest\bin\sdkmanager.bat" --licenses 2>$null
+    $yesInput | & "$sdkDir\cmdline-tools\latest\bin\sdkmanager.bat" --licenses 2>$null
 
-    Write-Host "    Installing SDK components (compileSdk=$compileSdk, buildTools=$buildTools)..." -ForegroundColor White
-    & "$ANDROID_HOME_PATH\cmdline-tools\latest\bin\sdkmanager.bat" "platforms;android-$compileSdk" "build-tools;$buildTools" "platform-tools"
+    Write-Ok "Android SDK installed: $sdkDir"
+}
 
-    Write-Ok "Android SDK installed: $ANDROID_HOME_PATH"
+# Install required SDK components
+Write-Step "Installing SDK components (compileSdk=$compileSdk, buildTools=$buildTools)..."
+$sdkmanager = "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat"
+if (Test-Path $sdkmanager) {
+    & $sdkmanager "platforms;android-$compileSdk" "build-tools;$buildTools" "platform-tools" 2>$null
+    Write-Ok "SDK components installed"
 } else {
-    # Check if needed components are installed
-    $sdkmanager = "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat"
-    if (Test-Path $sdkmanager) {
-        $installed = & $sdkmanager --list_installed 2>$null
-        if ($installed -notmatch "android-$compileSdk") {
-            Write-Host "    Installing missing SDK platform android-$compileSdk..." -ForegroundColor White
-            & $sdkmanager "platforms;android-$compileSdk" "build-tools;$buildTools"
-        }
+    Write-Skip "sdkmanager not found, assuming SDK components are present"
+}
+
+# ===== 6. Fix local.properties =====
+Write-Step "Configuring local.properties..."
+$localProps = "$PROJECT_DIR\local.properties"
+$sdkPath = $env:ANDROID_HOME -replace '\\', '/'
+Set-Content $localProps "sdk.dir=$sdkPath"
+Write-Ok "sdk.dir=$sdkPath"
+
+# ===== 7. Create signing keystore =====
+Write-Step "Setting up signing..."
+
+$keystorePath = "$PROJECT_DIR\release.keystore"
+$keytool = "$env:JAVA_HOME\bin\keytool.exe"
+if (-not (Test-Path $keytool)) { $keytool = "keytool" }
+
+if (Test-Path $keystorePath) {
+    Write-Host "    Found existing release.keystore" -ForegroundColor Yellow
+    $useExisting = Read-Host "    Use existing keystore? (Y/N)"
+    if ($useExisting -eq "Y" -or $useExisting -eq "y") {
+        $storePass = Read-Host "    Keystore password"
+        $keyAlias = Read-Host "    Key alias"
+        $keyPass = Read-Host "    Key password (Enter if same as keystore)"
+        if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
+    } else {
+        Remove-Item $keystorePath -Force
     }
 }
 
-# ===== 5. Keystore setup =====
-Write-Step "Keystore setup..."
-
-$keystorePath = "$PROJECT_DIR\release.keystore"
-$useExisting = "N"
-
-if (Test-Path $keystorePath) {
-    Write-Host "    Found existing release.keystore. Use it? (Y/N)" -ForegroundColor Yellow
-    $useExisting = Read-Host "    Choice"
-}
-
-if ($useExisting -eq "Y" -or $useExisting -eq "y") {
-    $storePass = Read-Host "    Keystore password"
-    $keyAlias = Read-Host "    Key alias"
+if (-not (Test-Path $keystorePath)) {
+    Write-Host "    Creating new keystore..." -ForegroundColor White
+    $storePass = Read-Host "    Keystore password (min 6 chars)"
+    $keyAlias = Read-Host "    Key alias (e.g. mykey)"
     $keyPass = Read-Host "    Key password (Enter if same as keystore)"
     if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
-} else {
-    Write-Host "    Creating new keystore..." -ForegroundColor White
-    $storePass = Read-Host "    Set keystore password (min 6 chars)"
-    $keyAlias = Read-Host "    Set key alias (e.g. myapp)"
-    $keyPass = Read-Host "    Set key password (Enter if same as keystore)"
-    if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
-
-    $cnName = Read-Host "    Your name (CN, e.g. Van Yang)"
-    $orgUnit = Read-Host "    Org unit (OU, e.g. Dev, Enter to skip)"
-    $org = Read-Host "    Organization (O, e.g. MyCompany, Enter to skip)"
-    $city = Read-Host "    City (L, Enter to skip)"
-    $state = Read-Host "    State/Province (ST, Enter to skip)"
+    $cnName = Read-Host "    Your name (CN)"
+    $org = Read-Host "    Organization (O, or press Enter to skip)"
     $country = Read-Host "    Country code (C, e.g. CN)"
 
     if ([string]::IsNullOrEmpty($cnName)) { $cnName = "Developer" }
     if ([string]::IsNullOrEmpty($country)) { $country = "CN" }
 
     $dname = "CN=$cnName"
-    if ($orgUnit) { $dname += ", OU=$orgUnit" }
-    if ($org) { $dname += ", O=$org" }
-    if ($city) { $dname += ", L=$city" }
-    if ($state) { $dname += ", ST=$state" }
+    if (-not [string]::IsNullOrEmpty($org)) { $dname += ", O=$org" }
     $dname += ", C=$country"
 
-    $keytoolPath = "$env:JAVA_HOME\bin\keytool.exe"
-    if (-not (Test-Path $keytoolPath)) { $keytoolPath = "keytool" }
-
-    & $keytoolPath -genkeypair -v `
+    & $keytool -genkeypair -v `
         -keystore $keystorePath `
         -alias $keyAlias `
         -keyalg RSA -keysize 2048 -validity 10000 `
         -storepass $storePass -keypass $keyPass `
         -dname $dname
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "Keystore creation failed!"
+    if (-not (Test-Path $keystorePath)) {
+        Write-Err "Failed to create keystore"
         Read-Host "Press Enter to exit"
         exit 1
     }
     Write-Ok "Keystore created: $keystorePath"
 }
 
-# ===== 6. Configure signing in build.gradle =====
-Write-Step "Configuring signing..."
+# ===== 8. Inject signing config into build.gradle =====
+Write-Step "Injecting signing config..."
 
-$keystoreRelPath = "release.keystore"
+$appGradlePath = "$PROJECT_DIR\$appModule\build.gradle"
+$gradleContent = Get-Content $appGradlePath -Raw
+
+# Build the signingConfigs block
+$ksPathEscaped = ($keystorePath -replace '\\', '/').Replace("'", "\\'")
 $signingBlock = @"
 
     signingConfigs {
         release {
-            storeFile file("$keystoreRelPath")
-            storePassword "$storePass"
-            keyAlias "$keyAlias"
-            keyPassword "$keyPass"
+            storeFile file('$ksPathEscaped')
+            storePassword '$storePass'
+            keyAlias '$keyAlias'
+            keyPassword '$keyPass'
         }
     }
 "@
 
-$buildTypeBlock = @"
-            signingConfig signingConfigs.release
-"@
-
-# Read current build.gradle
-$bgPath = $null
-foreach ($f in $gradleFiles) {
-    if (Test-Path $f) { $bgPath = $f; break }
-}
-$bgContent = Get-Content $bgPath -Raw
-
-# Inject signingConfigs if not present
-if ($bgContent -notmatch 'signingConfigs') {
-    # Insert after "android {"
-    $bgContent = $bgContent -replace '(android\s*\{)', "`$1`n$signingBlock"
-    Write-Ok "Injected signingConfigs"
+# Insert signingConfigs inside android { } block, right after the opening
+if ($gradleContent -notmatch 'signingConfigs\s*\{[^}]*release') {
+    # Insert after "android {" line
+    $gradleContent = $gradleContent -replace '(android\s*\{)', "`$1`n$signingBlock"
+    Write-Ok "signingConfigs block added"
+} else {
+    Write-Skip "signingConfigs already exists"
 }
 
-# Add signingConfig to release buildType if not present
-if ($bgContent -notmatch 'signingConfig\s+signingConfigs\.release') {
-    $bgContent = $bgContent -replace '(buildTypes\s*\{[\s\S]*?release\s*\{)', "`$1`n$buildTypeBlock"
-    Write-Ok "Injected release signing"
-}
+# Point release buildType to our signing config
+$gradleContent = $gradleContent -replace 'signingConfig\s+signingConfigs\.\w+', 'signingConfig signingConfigs.release'
+Write-Ok "release buildType -> signingConfigs.release"
 
-Set-Content $bgPath $bgContent -Encoding UTF8
+Set-Content $appGradlePath $gradleContent -Encoding UTF8
 Write-Ok "build.gradle updated"
 
-# ===== 7. Build AAB =====
-Write-Step "Building AAB..."
-
-Set-Location $PROJECT_DIR
-
-if (-not (Test-Path "gradlew.bat")) {
-    Write-Err "gradlew.bat not found in project!"
-    Read-Host "Press Enter to exit"
-    exit 1
+# ===== 9. Fix NDK path (remove hardcoded Mac path) =====
+if ($gradleContent -match 'ndkPath\s') {
+    $gradleContent = Get-Content $appGradlePath -Raw
+    $gradleContent = $gradleContent -replace '(?m)^\s*ndkPath\s.*$', '    // ndkPath removed by build script'
+    Set-Content $appGradlePath $gradleContent -Encoding UTF8
+    Write-Ok "Removed hardcoded ndkPath (not needed for AAB)"
 }
 
-# Set Gradle JDK
+# ===== 10. Set Gradle JDK =====
+Write-Step "Configuring Gradle..."
 $gpFile = "$PROJECT_DIR\gradle.properties"
 $javaHomePath = $env:JAVA_HOME -replace '\\', '/'
 if (Test-Path $gpFile) {
     $gpContent = Get-Content $gpFile -Raw
     if ($gpContent -notmatch 'org\.gradle\.java\.home') {
         Add-Content $gpFile "`norg.gradle.java.home=$javaHomePath"
+    } else {
+        $gpContent = $gpContent -replace 'org\.gradle\.java\.home=.*', "org.gradle.java.home=$javaHomePath"
+        Set-Content $gpFile $gpContent -Encoding UTF8
     }
 } else {
     Set-Content $gpFile "org.gradle.java.home=$javaHomePath"
 }
+Write-Ok "Gradle JDK -> $javaHomePath"
 
-Write-Host "    Running bundleRelease... (this may take a while)" -ForegroundColor White
-& .\gradlew.bat bundleRelease --no-daemon --stacktrace
+# ===== 11. Download Gradle wrapper if missing =====
+Set-Location $PROJECT_DIR
+
+if (-not (Test-Path "gradlew.bat")) {
+    Write-Step "gradlew.bat not found, creating wrapper..."
+    # Download gradle wrapper jar
+    $wrapperDir = "$PROJECT_DIR\gradle\wrapper"
+    New-Item -ItemType Directory -Force -Path $wrapperDir | Out-Null
+    $wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar"
+    Invoke-WebRequest -Uri $wrapperJarUrl -OutFile "$wrapperDir\gradle-wrapper.jar" -UseBasicParsing
+
+    # Create gradlew.bat
+    $gradlewBat = @'
+@rem Gradle startup script for Windows
+@if "%DEBUG%"=="" @echo off
+set DIRNAME=%~dp0
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+@rem Execute Gradle
+"%JAVA_HOME%/bin/java.exe" %DEFAULT_JVM_OPTS% %JAVA_OPTS% -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
+'@
+    Set-Content "gradlew.bat" $gradlewBat -Encoding ASCII
+    Write-Ok "gradlew.bat created"
+}
+
+# ===== 12. Build AAB =====
+Write-Step "Building AAB... (this may take several minutes)"
+Write-Host "    Running: gradlew.bat :${appModule}:bundleRelease" -ForegroundColor White
+
+& .\gradlew.bat ":${appModule}:bundleRelease" --no-daemon --stacktrace 2>&1 | Tee-Object -Variable buildOutput
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "Build failed! Check errors above."
+    Write-Err "Build failed! Check the output above."
+    Write-Host "`nCommon fixes:" -ForegroundColor Yellow
+    Write-Host "  - Missing SDK component: check compileSdk/buildTools versions"
+    Write-Host "  - Memory error: increase org.gradle.jvmargs in gradle.properties"
+    Write-Host "  - NDK error: install NDK via sdkmanager"
     Read-Host "Press Enter to exit"
     exit 1
 }
 
-# ===== 8. Find AAB output =====
+# ===== 13. Find and copy AAB =====
 Write-Step "Finding AAB output..."
 $aabFiles = Get-ChildItem -Path $PROJECT_DIR -Recurse -Filter "*.aab"
 if ($aabFiles.Count -gt 0) {
@@ -346,10 +412,10 @@ if ($aabFiles.Count -gt 0) {
         Copy-Item $aab.FullName "$SCRIPT_DIR\$destName"
         Write-Ok "AAB ready: $SCRIPT_DIR\$destName"
         Write-Host "    Source: $($aab.FullName)" -ForegroundColor Gray
-        Write-Host "    Size: $([math]::Round($aab.Length / 1MB, 2)) MB" -ForegroundColor Gray
+        Write-Host "    Size:   $([math]::Round($aab.Length / 1MB, 2)) MB" -ForegroundColor Gray
     }
 } else {
-    Write-Err "No AAB file found. Check build log."
+    Write-Err "No AAB file found. Check build output."
 }
 
 Write-Host "`n===== DONE =====" -ForegroundColor Green
