@@ -365,12 +365,64 @@ Write-Ok "sdk.dir=$sdkPath"
 Write-Step "Setting up signing..."
 
 $keystorePath = "$PROJECT_DIR\release.keystore"
-$keytool = "$env:JAVA_HOME\bin\keytool.exe"
-if (-not (Test-Path $keytool)) { $keytool = "keytool" }
+
+# Find keytool - try multiple locations
+$keytool = $null
+# Try 1: JAVA_HOME
+if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\keytool.exe")) {
+    $keytool = "$env:JAVA_HOME\bin\keytool.exe"
+}
+# Try 2: Same dir as java.exe
+if (-not $keytool) {
+    try {
+        $javaExe = cmd /c "where java 2>&1" | Select-Object -First 1
+        if ($javaExe -and (Test-Path $javaExe)) {
+            $javaDir = Split-Path $javaExe
+            if (Test-Path "$javaDir\keytool.exe") {
+                $keytool = "$javaDir\keytool.exe"
+                # Also fix JAVA_HOME while we're at it
+                $env:JAVA_HOME = Split-Path $javaDir
+                $env:PATH = "$javaDir;$env:PATH"
+            }
+        }
+    } catch {}
+}
+# Try 3: Our downloaded JDK
+if (-not $keytool -and (Test-Path $TOOLS_DIR)) {
+    $dlJdk = Get-ChildItem $TOOLS_DIR -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^jdk' } | Select-Object -First 1
+    if ($dlJdk -and (Test-Path "$($dlJdk.FullName)\bin\keytool.exe")) {
+        $keytool = "$($dlJdk.FullName)\bin\keytool.exe"
+        $env:JAVA_HOME = $dlJdk.FullName
+        $env:PATH = "$($dlJdk.FullName)\bin;$env:PATH"
+    }
+}
+# Try 4: Common Windows JDK paths
+if (-not $keytool) {
+    $commonPaths = @(
+        "C:\Program Files\Java",
+        "C:\Program Files\Eclipse Adoptium",
+        "C:\Program Files\Microsoft\jdk*"
+    )
+    foreach ($cp in $commonPaths) {
+        $found = Get-ChildItem $cp -Recurse -Filter "keytool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            $keytool = $found.FullName
+            $env:JAVA_HOME = $found.Directory.Parent.FullName
+            $env:PATH = "$($found.DirectoryName);$env:PATH"
+            break
+        }
+    }
+}
+
+if (-not $keytool) {
+    throw "Cannot find keytool.exe. Make sure JDK is installed."
+}
+Write-Ok "keytool found: $keytool"
 
 if (Test-Path $keystorePath) { Remove-Item $keystorePath -Force }
 
 Write-Host "    Creating new signing keystore..." -ForegroundColor White
+Write-Host "    (password/alias/country are required, others can be skipped)" -ForegroundColor Gray
 
 # Required fields - loop until not empty
 $storePass = ""
