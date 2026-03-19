@@ -7,8 +7,8 @@ $WORKSPACE = "$SCRIPT_DIR\android-build"
 $TOOLS_DIR = "$WORKSPACE\_tools"
 $LOG_FILE = "$SCRIPT_DIR\build-log.txt"
 
-# Log everything to file
-Start-Transcript -Path $LOG_FILE -Force | Out-Null
+# Log everything to file (silently)
+try { Start-Transcript -Path $LOG_FILE -Force | Out-Null } catch {}
 
 $ErrorActionPreference = "Stop"
 
@@ -21,7 +21,7 @@ try {
 
 # ===== 1. Find and extract project zip =====
 Write-Step "Finding project zip..."
-$zipFiles = Get-ChildItem -Path $SCRIPT_DIR -Filter "*.zip" -File | Where-Object { $_.Name -ne "jdk.zip" -and $_.Name -ne "cmdline-tools.zip" }
+$zipFiles = @(Get-ChildItem -Path $SCRIPT_DIR -Filter "*.zip" -File | Where-Object { $_.Name -ne "jdk.zip" -and $_.Name -ne "cmdline-tools.zip" })
 if ($zipFiles.Count -eq 0) {
     Write-Err "No zip file found. Put your project zip in the same folder as this script."
     throw "No zip file found"
@@ -33,8 +33,7 @@ if ($zipFiles.Count -eq 0) {
     $largest = $zipFiles | Sort-Object Length -Descending | Select-Object -First 1
     Write-Host "    Multiple zip files found, auto-selecting largest:" -ForegroundColor Yellow
     foreach ($z in $zipFiles) {
-        $mark = if ($z.Name -eq $largest.Name) { " <--" } else { "" }
-        Write-Host "      $($z.Name) ($([math]::Round($z.Length / 1MB, 1)) MB)$mark"
+        Write-Host "      $($z.Name) ($([math]::Round($z.Length / 1MB, 1)) MB)"
     }
     $zipFile = $largest.FullName
     Write-Ok "Selected: $($largest.Name)"
