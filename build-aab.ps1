@@ -113,7 +113,7 @@ if (Test-Path $unityBuildGradle) {
     }
 
     if ($patched) {
-        Set-Content $unityBuildGradle $lines -Encoding UTF8
+        [System.IO.File]::WriteAllLines($unityBuildGradle, $lines)
         Write-Ok "IL2CPP build tasks commented out"
     } else {
         Write-Skip "No IL2CPP tasks found to patch"
@@ -492,14 +492,14 @@ if ($gradleContent -notmatch 'signingConfigs\s*\{[^}]*release') {
 $gradleContent = $gradleContent -replace 'signingConfig\s+signingConfigs\.\w+', 'signingConfig signingConfigs.release'
 Write-Ok "release buildType -> signingConfigs.release"
 
-Set-Content $appGradlePath $gradleContent -Encoding UTF8
+[System.IO.File]::WriteAllText($appGradlePath, $gradleContent)
 Write-Ok "build.gradle updated"
 
 # ===== 9. Fix NDK path (remove hardcoded Mac path) =====
 if ($gradleContent -match 'ndkPath\s') {
     $gradleContent = Get-Content $appGradlePath -Raw
     $gradleContent = $gradleContent -replace '(?m)^\s*ndkPath\s.*$', '    // ndkPath removed by build script'
-    Set-Content $appGradlePath $gradleContent -Encoding UTF8
+    [System.IO.File]::WriteAllText($appGradlePath, $gradleContent)
     Write-Ok "Removed hardcoded ndkPath (not needed for AAB)"
 }
 
@@ -513,7 +513,7 @@ if (Test-Path $gpFile) {
         Add-Content $gpFile "`norg.gradle.java.home=$javaHomePath"
     } else {
         $gpContent = $gpContent -replace 'org\.gradle\.java\.home=.*', "org.gradle.java.home=$javaHomePath"
-        Set-Content $gpFile $gpContent -Encoding UTF8
+        [System.IO.File]::WriteAllText($gpFile, $gpContent)
     }
 } else {
     Set-Content $gpFile "org.gradle.java.home=$javaHomePath"
@@ -528,7 +528,8 @@ $wrapperProps = "$PROJECT_DIR\gradle\wrapper\gradle-wrapper.properties"
 if (Test-Path $wrapperProps) {
     $wpContent = Get-Content $wrapperProps -Raw
     $wpContent = $wpContent -replace 'https\\://services\.gradle\.org/distributions/', 'https\://mirrors.cloud.tencent.com/gradle/'
-    Set-Content $wrapperProps $wpContent -Encoding UTF8
+    # Use ASCII encoding to avoid BOM (PS 5.1 UTF8 adds BOM which breaks Gradle)
+    [System.IO.File]::WriteAllText($wrapperProps, $wpContent)
     Write-Ok "Gradle mirror -> Tencent (faster download)"
 }
 
