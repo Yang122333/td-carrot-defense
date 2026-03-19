@@ -367,54 +367,49 @@ $keystorePath = "$PROJECT_DIR\release.keystore"
 
 # Find keytool - try multiple locations
 $keytool = $null
-# Try 1: JAVA_HOME
-if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\keytool.exe")) {
-    $keytool = "$env:JAVA_HOME\bin\keytool.exe"
-}
-# Try 2: Same dir as java.exe
-if (-not $keytool) {
-    try {
-        $javaExe = cmd /c "where java 2>&1" | Select-Object -First 1
-        if ($javaExe -and (Test-Path $javaExe)) {
-            $javaDir = Split-Path $javaExe
-            if (Test-Path "$javaDir\keytool.exe") {
-                $keytool = "$javaDir\keytool.exe"
-                # Also fix JAVA_HOME while we're at it
-                $env:JAVA_HOME = Split-Path $javaDir
-                $env:PATH = "$javaDir;$env:PATH"
-            }
-        }
-    } catch {}
-}
-# Try 3: Our downloaded JDK
-if (-not $keytool -and (Test-Path $TOOLS_DIR)) {
-    $dlJdk = Get-ChildItem $TOOLS_DIR -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^jdk' } | Select-Object -First 1
-    if ($dlJdk -and (Test-Path "$($dlJdk.FullName)\bin\keytool.exe")) {
-        $keytool = "$($dlJdk.FullName)\bin\keytool.exe"
-        $env:JAVA_HOME = $dlJdk.FullName
-        $env:PATH = "$($dlJdk.FullName)\bin;$env:PATH"
-    }
-}
-# Try 4: Common Windows JDK paths
-if (-not $keytool) {
-    $commonPaths = @(
-        "C:\Program Files\Java",
-        "C:\Program Files\Eclipse Adoptium",
-        "C:\Program Files\Microsoft\jdk*"
-    )
-    foreach ($cp in $commonPaths) {
-        $found = Get-ChildItem $cp -Recurse -Filter "keytool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) {
-            $keytool = $found.FullName
-            $env:JAVA_HOME = $found.Directory.Parent.FullName
-            $env:PATH = "$($found.DirectoryName);$env:PATH"
-            break
+$keytoolSearchPaths = @()
+
+# Try 1: JAVA_HOME from environment
+if ($env:JAVA_HOME) { $keytoolSearchPaths += "$env:JAVA_HOME\bin\keytool.exe" }
+
+# Try 2: Common user JDK locations (all users)
+foreach ($userDir in @(Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue)) {
+    $jdksDir = "$($userDir.FullName)\.jdks"
+    if (Test-Path $jdksDir) {
+        foreach ($jdk in @(Get-ChildItem $jdksDir -Directory -ErrorAction SilentlyContinue)) {
+            $keytoolSearchPaths += "$($jdk.FullName)\bin\keytool.exe"
         }
     }
 }
 
+# Try 3: Our downloaded JDK
+if (Test-Path $TOOLS_DIR) {
+    foreach ($d in @(Get-ChildItem $TOOLS_DIR -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^jdk' })) {
+        $keytoolSearchPaths += "$($d.FullName)\bin\keytool.exe"
+    }
+}
+
+# Try 4: Program Files
+foreach ($pf in @("C:\Program Files\Java", "C:\Program Files\Eclipse Adoptium", "C:\Program Files (x86)\Java")) {
+    if (Test-Path $pf) {
+        foreach ($found in @(Get-ChildItem $pf -Recurse -Filter "keytool.exe" -ErrorAction SilentlyContinue)) {
+            $keytoolSearchPaths += $found.FullName
+        }
+    }
+}
+
+# Find first existing keytool
+foreach ($kt in $keytoolSearchPaths) {
+    if (Test-Path $kt) {
+        $keytool = $kt
+        $env:JAVA_HOME = (Split-Path (Split-Path $kt))
+        $env:PATH = "$(Split-Path $kt);$env:PATH"
+        break
+    }
+}
+
 if (-not $keytool) {
-    throw "Cannot find keytool.exe. Make sure JDK is installed."
+    throw "Cannot find keytool.exe anywhere. Searched: $($keytoolSearchPaths -join ', ')"
 }
 Write-Ok "keytool found: $keytool"
 
