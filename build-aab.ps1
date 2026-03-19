@@ -331,20 +331,34 @@ if (-not (Test-Path $keytool)) { $keytool = "keytool" }
 if (Test-Path $keystorePath) { Remove-Item $keystorePath -Force }
 
 Write-Host "    Creating new signing keystore..." -ForegroundColor White
-$storePass = Read-Host "    Keystore password (min 6 chars)"
-$keyAlias = Read-Host "    Key alias (e.g. mykey)"
+
+# Required fields - loop until not empty
+$storePass = ""
+while ([string]::IsNullOrEmpty($storePass) -or $storePass.Length -lt 6) {
+    $storePass = Read-Host "    Keystore password (min 6 chars, required)"
+}
+
+$keyAlias = ""
+while ([string]::IsNullOrEmpty($keyAlias)) {
+    $keyAlias = Read-Host "    Key alias (e.g. mykey, required)"
+}
+
 $keyPass = Read-Host "    Key password (Enter if same as keystore)"
 if ([string]::IsNullOrEmpty($keyPass)) { $keyPass = $storePass }
-    $cnName = Read-Host "    Your name (CN)"
-    $org = Read-Host "    Organization (O, or press Enter to skip)"
-    $country = Read-Host "    Country code (C, e.g. CN)"
 
-    if ([string]::IsNullOrEmpty($cnName)) { $cnName = "Developer" }
-    if ([string]::IsNullOrEmpty($country)) { $country = "CN" }
+$country = ""
+while ([string]::IsNullOrEmpty($country)) {
+    $country = Read-Host "    Country code (e.g. CN, required)"
+}
 
-    $dname = "CN=$cnName"
-    if (-not [string]::IsNullOrEmpty($org)) { $dname += ", O=$org" }
-    $dname += ", C=$country"
+# Optional fields
+$cnName = Read-Host "    Your name (CN, Enter to skip)"
+$org = Read-Host "    Organization (O, Enter to skip)"
+
+if ([string]::IsNullOrEmpty($cnName)) { $cnName = "Developer" }
+
+$dname = "CN=$cnName, C=$country"
+if (-not [string]::IsNullOrEmpty($org)) { $dname += ", O=$org" }
 
     & $keytool -genkeypair -v `
         -keystore $keystorePath `
