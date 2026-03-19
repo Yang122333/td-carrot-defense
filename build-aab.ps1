@@ -582,14 +582,22 @@ set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 # ===== 12. Build AAB =====
 Write-Step "Building AAB... (this may take several minutes)"
 Write-Host "    Running: gradlew.bat :${appModule}:bundleRelease" -ForegroundColor White
+Write-Host "    Build output also saved to: $LOG_FILE" -ForegroundColor Gray
 
 $ErrorActionPreference = "Continue"
-& .\gradlew.bat ":${appModule}:bundleRelease" --no-daemon --stacktrace 2>&1 | Tee-Object -Variable buildOutput
+$buildLog = & .\gradlew.bat ":${appModule}:bundleRelease" --no-daemon --stacktrace 2>&1
 $buildExitCode = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 
+# Write build output to console and log
+foreach ($line in $buildLog) {
+    Write-Host $line
+    "$line" | Out-File $LOG_FILE -Append
+}
+
 if ($buildExitCode -ne 0) {
-    Write-Err "Build failed! Check the output above."
+    Write-Err "Build failed! Last 30 lines:"
+    $buildLog | Select-Object -Last 30 | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
     Write-Host "`nCommon fixes:" -ForegroundColor Yellow
     Write-Host "  - Missing SDK component: check compileSdk/buildTools versions"
     Write-Host "  - Memory error: increase org.gradle.jvmargs in gradle.properties"
