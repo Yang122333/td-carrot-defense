@@ -503,8 +503,8 @@ $signingBlock = @"
 
 # Insert signingConfigs inside android { } block, right after the opening
 if ($gradleContent -notmatch 'signingConfigs\s*\{[^}]*release') {
-    # Insert after "android {" line
-    $gradleContent = $gradleContent -replace '(android\s*\{)', "`$1`n$signingBlock"
+    # Match exactly "android {" at line start, not "androidJunkCode {" etc.
+    $gradleContent = $gradleContent -replace '(?m)(^android\b\s*\{)', "`$1`n$signingBlock"
     Write-Ok "signingConfigs block added"
 } else {
     Write-Skip "signingConfigs already exists"
