@@ -8,17 +8,7 @@ $TOOLS_DIR = "$WORKSPACE\_tools"
 $LOG_FILE = "$SCRIPT_DIR\build-log.txt"
 
 # Log everything to file
-Start-Transcript -Path $LOG_FILE -Force
-
-# Catch all errors so window doesn't close
-trap {
-    Write-Host "`n!!! ERROR: $_" -ForegroundColor Red
-    Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
-    Write-Host "`nFull log saved to: $LOG_FILE" -ForegroundColor Yellow
-    Stop-Transcript
-    Read-Host "Press Enter to exit"
-    exit 1
-}
+Start-Transcript -Path $LOG_FILE -Force | Out-Null
 
 $ErrorActionPreference = "Stop"
 
@@ -26,6 +16,8 @@ function Write-Step($msg) { Write-Host "`n>>> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Skip($msg) { Write-Host "    [SKIP] $msg" -ForegroundColor Yellow }
 function Write-Err($msg) { Write-Host "    [ERROR] $msg" -ForegroundColor Red }
+
+try {
 
 # ===== 1. Find and extract project zip =====
 Write-Step "Finding project zip..."
@@ -489,5 +481,14 @@ if ($aabFiles.Count -gt 0) {
 
 Write-Host "`n===== DONE =====" -ForegroundColor Green
 Write-Host "Log saved to: $LOG_FILE" -ForegroundColor Gray
-Stop-Transcript
-Read-Host "Press Enter to exit"
+
+} catch {
+    Write-Host "`n!!! ERROR: $_" -ForegroundColor Red
+    Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
+    Write-Host "`nLog saved to: $LOG_FILE" -ForegroundColor Yellow
+    Stop-Transcript | Out-Null
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+Stop-Transcript | Out-Null
