@@ -178,7 +178,8 @@ Write-Ok "App module: $appModule"
 Write-Step "Reading project config..."
 
 $compileSdk = 34
-if ($appBuildGradle -match 'compileSdk[Vv]ersion?\s*[=:]\s*(\d+)') { $compileSdk = $Matches[1] }
+if ($appBuildGradle -match 'compileSdk[Vv]ersion?\s+(\d+)') { $compileSdk = $Matches[1] }
+elseif ($appBuildGradle -match 'compileSdk[Vv]ersion?\s*[=:]\s*(\d+)') { $compileSdk = $Matches[1] }
 elseif ($appBuildGradle -match 'compileSdk\s*[=:]\s*(\d+)') { $compileSdk = $Matches[1] }
 
 $buildTools = "$compileSdk.0.0"
@@ -212,8 +213,8 @@ Write-Step "Checking JDK..."
 
 $javaOk = $false
 try {
-    $javaVer = & java -version 2>&1 | Select-Object -First 1
-    if ($javaVer -match '"(\d+)') {
+    $javaVer = cmd /c "java -version 2>&1" | Select-Object -First 1
+    if ($javaVer -match '(\d+)[\.\"]') {
         $existingMajor = [int]$Matches[1]
         if ($existingMajor -ge $jdkVersion) {
             Write-Skip "JDK $existingMajor found (need >= $jdkVersion)"
@@ -467,6 +468,15 @@ Write-Ok "Gradle JDK -> $javaHomePath"
 # ===== 11. Download Gradle wrapper if missing =====
 Set-Location $PROJECT_DIR
 
+# Replace Gradle distribution URL with Tencent mirror (faster in China)
+$wrapperProps = "$PROJECT_DIR\gradle\wrapper\gradle-wrapper.properties"
+if (Test-Path $wrapperProps) {
+    $wpContent = Get-Content $wrapperProps -Raw
+    $wpContent = $wpContent -replace 'https\\://services\.gradle\.org/distributions/', 'https\://mirrors.cloud.tencent.com/gradle/'
+    Set-Content $wrapperProps $wpContent -Encoding UTF8
+    Write-Ok "Gradle mirror -> Tencent (faster download)"
+}
+
 if (-not (Test-Path "gradlew.bat")) {
     Write-Step "gradlew.bat not found, creating wrapper..."
     # Download gradle wrapper jar
@@ -495,9 +505,12 @@ set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 Write-Step "Building AAB... (this may take several minutes)"
 Write-Host "    Running: gradlew.bat :${appModule}:bundleRelease" -ForegroundColor White
 
+$ErrorActionPreference = "Continue"
 & .\gradlew.bat ":${appModule}:bundleRelease" --no-daemon --stacktrace 2>&1 | Tee-Object -Variable buildOutput
+$buildExitCode = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
 
-if ($LASTEXITCODE -ne 0) {
+if ($buildExitCode -ne 0) {
     Write-Err "Build failed! Check the output above."
     Write-Host "`nCommon fixes:" -ForegroundColor Yellow
     Write-Host "  - Missing SDK component: check compileSdk/buildTools versions"
