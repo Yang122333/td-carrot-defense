@@ -7,15 +7,32 @@ $WORKSPACE = "$SCRIPT_DIR\android-build"
 $TOOLS_DIR = "$WORKSPACE\_tools"
 $LOG_FILE = "$SCRIPT_DIR\build-log.txt"
 
-# Log everything to file (silently)
-try { Start-Transcript -Path $LOG_FILE -Force | Out-Null } catch {}
+# Clear old log
+"Build started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $LOG_FILE -Force
 
 $ErrorActionPreference = "Stop"
 
-function Write-Step($msg) { Write-Host "`n>>> $msg" -ForegroundColor Cyan }
-function Write-Ok($msg) { Write-Host "    [OK] $msg" -ForegroundColor Green }
-function Write-Skip($msg) { Write-Host "    [SKIP] $msg" -ForegroundColor Yellow }
-function Write-Err($msg) { Write-Host "    [ERROR] $msg" -ForegroundColor Red }
+# Log helper - write to both console and file
+function Write-Step($msg) { 
+    $text = "`n>>> $msg"
+    Write-Host $text -ForegroundColor Cyan
+    $text | Out-File $LOG_FILE -Append
+}
+function Write-Ok($msg) { 
+    $text = "    [OK] $msg"
+    Write-Host $text -ForegroundColor Green
+    $text | Out-File $LOG_FILE -Append
+}
+function Write-Skip($msg) { 
+    $text = "    [SKIP] $msg"
+    Write-Host $text -ForegroundColor Yellow
+    $text | Out-File $LOG_FILE -Append
+}
+function Write-Err($msg) { 
+    $text = "    [ERROR] $msg"
+    Write-Host $text -ForegroundColor Red
+    $text | Out-File $LOG_FILE -Append
+}
 
 try {
 
@@ -597,8 +614,9 @@ Write-Host "Log saved to: $LOG_FILE" -ForegroundColor Gray
     Write-Host "`n!!! ERROR: $_" -ForegroundColor Red
     Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
     Write-Host "`nLog saved to: $LOG_FILE" -ForegroundColor Yellow
-    Stop-Transcript | Out-Null
+    "ERROR: $_" | Out-File $LOG_FILE -Append
+    "Stack: $($_.ScriptStackTrace)" | Out-File $LOG_FILE -Append
     exit 1
 }
 
-Stop-Transcript | Out-Null
+"Build completed: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $LOG_FILE -Append
