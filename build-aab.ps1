@@ -223,38 +223,54 @@ try {
 } catch {}
 
 if (-not $javaOk) {
-    Write-Host "    Installing JDK $jdkVersion..." -ForegroundColor White
-    New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
-
-    $jdkUrls = @{
-        17 = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.12_7.zip"
-        21 = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jdk_x64_windows_hotspot_21.0.4_7.zip"
+    # Check if we already downloaded JDK in a previous run
+    $existingJdkDir = $null
+    if (Test-Path $TOOLS_DIR) {
+        $existingJdkDir = Get-ChildItem $TOOLS_DIR -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^jdk' } | Select-Object -First 1
     }
 
-    # JDK 11 project can use JDK 17 (backward compatible with Gradle 8.7)
-    if ($jdkVersion -le 17) {
-        $jdkUrl = $jdkUrls[17]
-        $jdkVersion = 17
-        Write-Host "    Using Adoptium JDK 17 (free, no login required)" -ForegroundColor Yellow
-    } elseif ($jdkUrls.ContainsKey($jdkVersion)) {
-        $jdkUrl = $jdkUrls[$jdkVersion]
+    if ($existingJdkDir) {
+        Write-Skip "JDK already downloaded: $($existingJdkDir.FullName)"
+        $env:JAVA_HOME = $existingJdkDir.FullName
+        $env:PATH = "$($existingJdkDir.FullName)\bin;$env:PATH"
     } else {
-        $jdkUrl = $jdkUrls[17]
-        $jdkVersion = 17
-        Write-Host "    No preset URL for requested JDK, using JDK 17" -ForegroundColor Yellow
+        Write-Host "    Installing JDK $jdkVersion..." -ForegroundColor White
+        New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
+
+        $jdkUrls = @{
+            17 = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.12_7.zip"
+            21 = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jdk_x64_windows_hotspot_21.0.4_7.zip"
+        }
+
+        if ($jdkVersion -le 17) {
+            $jdkUrl = $jdkUrls[17]
+            $jdkVersion = 17
+            Write-Host "    Using Adoptium JDK 17 (free, no login required)" -ForegroundColor Yellow
+        } elseif ($jdkUrls.ContainsKey($jdkVersion)) {
+            $jdkUrl = $jdkUrls[$jdkVersion]
+        } else {
+            $jdkUrl = $jdkUrls[17]
+            $jdkVersion = 17
+            Write-Host "    No preset URL for requested JDK, using JDK 17" -ForegroundColor Yellow
+        }
+
+        $jdkZip = "$TOOLS_DIR\jdk.zip"
+        # Skip download if zip already exists
+        if (Test-Path $jdkZip) {
+            Write-Skip "JDK zip already downloaded, extracting..."
+        } else {
+            Write-Host "    Downloading JDK... (may take a few minutes)" -ForegroundColor White
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $jdkUrl -OutFile $jdkZip -UseBasicParsing
+        }
+        Write-Host "    Extracting JDK..." -ForegroundColor White
+        Expand-Archive $jdkZip -DestinationPath $TOOLS_DIR -Force
+
+        $jdkDir = Get-ChildItem $TOOLS_DIR -Directory | Where-Object { $_.Name -match '^jdk' } | Select-Object -First 1
+        $env:JAVA_HOME = $jdkDir.FullName
+        $env:PATH = "$($jdkDir.FullName)\bin;$env:PATH"
+        Write-Ok "JDK installed: $($jdkDir.FullName)"
     }
-
-    $jdkZip = "$TOOLS_DIR\jdk.zip"
-    Write-Host "    Downloading JDK... (may take a few minutes)" -ForegroundColor White
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $jdkUrl -OutFile $jdkZip -UseBasicParsing
-    Write-Host "    Extracting JDK..." -ForegroundColor White
-    Expand-Archive $jdkZip -DestinationPath $TOOLS_DIR -Force
-
-    $jdkDir = Get-ChildItem $TOOLS_DIR -Directory | Where-Object { $_.Name -match '^jdk' } | Select-Object -First 1
-    $env:JAVA_HOME = $jdkDir.FullName
-    $env:PATH = "$($jdkDir.FullName)\bin;$env:PATH"
-    Write-Ok "JDK installed: $($jdkDir.FullName)"
 } else {
     if (-not $env:JAVA_HOME) {
         $env:JAVA_HOME = (Get-Command java).Source | Split-Path | Split-Path
@@ -275,33 +291,44 @@ if ($env:ANDROID_HOME -and (Test-Path "$env:ANDROID_HOME\cmdline-tools")) {
 }
 
 if (-not $sdkOk) {
-    Write-Host "    Installing Android SDK..." -ForegroundColor White
-    New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
-
     $sdkDir = "$TOOLS_DIR\android-sdk"
-    New-Item -ItemType Directory -Force -Path "$sdkDir\cmdline-tools" | Out-Null
 
-    $cmdToolsUrl = "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip"
-    $cmdToolsZip = "$TOOLS_DIR\cmdline-tools.zip"
-    Write-Host "    Downloading SDK command-line tools..." -ForegroundColor White
-    Invoke-WebRequest -Uri $cmdToolsUrl -OutFile $cmdToolsZip -UseBasicParsing
-    Expand-Archive $cmdToolsZip -DestinationPath "$sdkDir\cmdline-tools" -Force
+    # Check if SDK was downloaded in a previous run
+    if (Test-Path "$sdkDir\cmdline-tools\latest\bin\sdkmanager.bat") {
+        Write-Skip "Android SDK already downloaded: $sdkDir"
+        $env:ANDROID_HOME = $sdkDir
+        $env:PATH = "$sdkDir\cmdline-tools\latest\bin;$sdkDir\platform-tools;$env:PATH"
+    } else {
+        Write-Host "    Installing Android SDK..." -ForegroundColor White
+        New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
+        New-Item -ItemType Directory -Force -Path "$sdkDir\cmdline-tools" | Out-Null
 
-    $extractedDir = "$sdkDir\cmdline-tools\cmdline-tools"
-    $latestDir = "$sdkDir\cmdline-tools\latest"
-    if (Test-Path $extractedDir) {
-        if (Test-Path $latestDir) { Remove-Item -Recurse -Force $latestDir }
-        Rename-Item $extractedDir "latest"
+        $cmdToolsUrl = "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip"
+        $cmdToolsZip = "$TOOLS_DIR\cmdline-tools.zip"
+        if (Test-Path $cmdToolsZip) {
+            Write-Skip "SDK zip already downloaded, extracting..."
+        } else {
+            Write-Host "    Downloading SDK command-line tools..." -ForegroundColor White
+            Invoke-WebRequest -Uri $cmdToolsUrl -OutFile $cmdToolsZip -UseBasicParsing
+        }
+        Expand-Archive $cmdToolsZip -DestinationPath "$sdkDir\cmdline-tools" -Force
+
+        $extractedDir = "$sdkDir\cmdline-tools\cmdline-tools"
+        $latestDir = "$sdkDir\cmdline-tools\latest"
+        if (Test-Path $extractedDir) {
+            if (Test-Path $latestDir) { Remove-Item -Recurse -Force $latestDir }
+            Rename-Item $extractedDir "latest"
+        }
+
+        $env:ANDROID_HOME = $sdkDir
+        $env:PATH = "$sdkDir\cmdline-tools\latest\bin;$sdkDir\platform-tools;$env:PATH"
+
+        Write-Host "    Accepting licenses..." -ForegroundColor White
+        $yesInput = ("y`n" * 30)
+        $yesInput | & "$sdkDir\cmdline-tools\latest\bin\sdkmanager.bat" --licenses 2>$null
+
+        Write-Ok "Android SDK installed: $sdkDir"
     }
-
-    $env:ANDROID_HOME = $sdkDir
-    $env:PATH = "$sdkDir\cmdline-tools\latest\bin;$sdkDir\platform-tools;$env:PATH"
-
-    Write-Host "    Accepting licenses..." -ForegroundColor White
-    $yesInput = ("y`n" * 30)
-    $yesInput | & "$sdkDir\cmdline-tools\latest\bin\sdkmanager.bat" --licenses 2>$null
-
-    Write-Ok "Android SDK installed: $sdkDir"
 }
 
 # Install required SDK components
