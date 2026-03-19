@@ -47,7 +47,20 @@ const ASSET_NAMES = {
   'bullet-corn': 'bullet-corn.png', 'bullet-ice': 'bullet-ice.png', 'bullet-fire': 'bullet-fire.png',
   'btn-start': 'btn-start.png', 'btn-nextwave': 'btn-nextwave.png',
   'icon-coin': 'icon-coin.png', 'icon-heart': 'icon-heart.png',
-  'title': 'title.png'
+  'title': 'title.png',
+  'title-v2': 'title-v2.png',
+  'btn-start-v2': 'btn-start-v2.png',
+  'btn-nextwave-v2': 'btn-nextwave-v2.png',
+  'icon-coin-v2': 'icon-coin-v2.png',
+  'icon-heart-v2': 'icon-heart-v2.png',
+  'panel-win': 'panel-win.png',
+  'panel-lose': 'panel-lose.png',
+  'panel-upgrade': 'panel-upgrade.png',
+  'btn-upgrade': 'btn-upgrade.png',
+  'btn-sell': 'btn-sell.png',
+  'tower-slot': 'tower-slot.png',
+  'hud-bg-top': 'hud-bg-top.png',
+  'hud-bg-bottom': 'hud-bg-bottom.png'
 };
 const IMAGES = {};
 let assetsLoaded = 0, assetsTotal = Object.keys(ASSET_NAMES).length, allAssetsReady = false;
@@ -1348,16 +1361,18 @@ function drawMap() {
       if (hasTower) continue;
       const hasObs = getObstacleAt(gx, gy);
       if (hasObs) continue;
-      const cx = gx * CELL + CELL/2;
-      const cy = gy * CELL + UI_TOP + CELL/2;
-      CTX.globalAlpha = 0.18;
-      CTX.fillStyle = '#0a3a10';
-      CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.fill();
-      CTX.globalAlpha = 0.12;
-      CTX.strokeStyle = '#2a6a30';
-      CTX.lineWidth = 1.5;
-      CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.stroke();
-      CTX.globalAlpha = 1;
+      if (!drawImg('tower-slot', gx*CELL+4, gy*CELL+UI_TOP+4, CELL-8, CELL-8)) {
+        const cx = gx * CELL + CELL/2;
+        const cy = gy * CELL + UI_TOP + CELL/2;
+        CTX.globalAlpha = 0.18;
+        CTX.fillStyle = '#0a3a10';
+        CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.fill();
+        CTX.globalAlpha = 0.12;
+        CTX.strokeStyle = '#2a6a30';
+        CTX.lineWidth = 1.5;
+        CTX.beginPath(); CTX.arc(cx, cy, 18, 0, Math.PI*2); CTX.stroke();
+        CTX.globalAlpha = 1;
+      }
     }
   }
 
@@ -1533,15 +1548,17 @@ function drawMap() {
 
 function drawUI() {
   // Top bar background - semi-transparent dark with bottom border
-  CTX.fillStyle = 'rgba(20,20,40,0.85)';
-  CTX.fillRect(0, 0, W, UI_TOP);
+  if (!drawImg('hud-bg-top', 0, 0, W, UI_TOP)) {
+    CTX.fillStyle = 'rgba(20,20,40,0.85)';
+    CTX.fillRect(0, 0, W, UI_TOP);
+  }
   CTX.strokeStyle = 'rgba(255,255,255,0.4)';
   CTX.lineWidth = 1;
   CTX.beginPath(); CTX.moveTo(0, UI_TOP - 0.5); CTX.lineTo(W, UI_TOP - 0.5); CTX.stroke();
 
   // Coin
   const iconSize = 24;
-  if (!drawImg('icon-coin', 10, 8, iconSize, iconSize)) {
+  if (!drawImg('icon-coin-v2', 10, 8, iconSize, iconSize) && !drawImg('icon-coin', 10, 8, iconSize, iconSize)) {
     CTX.fillStyle = '#FFD700'; CTX.font = 'bold 14px Arial'; CTX.textAlign = 'left';
     CTX.fillText('💰', 10, 26);
   }
@@ -1555,7 +1572,7 @@ function drawUI() {
   CTX.restore();
 
   // Hearts
-  if (!drawImg('icon-heart', 120, 8, iconSize, iconSize)) {
+  if (!drawImg('icon-heart-v2', 120, 8, iconSize, iconSize) && !drawImg('icon-heart', 120, 8, iconSize, iconSize)) {
     CTX.fillStyle = '#f44336'; CTX.font = 'bold 14px Arial'; CTX.textAlign = 'left';
     CTX.fillText('❤', 120, 26);
   }
@@ -1579,7 +1596,7 @@ function drawUI() {
     CTX.beginPath();
     CTX.roundRect(btnX, btnY, btnW, btnH, 6);
     CTX.fill();
-    if (!drawImg('btn-nextwave', btnX + 4, btnY + 2, 24, 24)) {
+    if (!drawImg('btn-nextwave-v2', btnX + 4, btnY + 2, 24, 24) && !drawImg('btn-nextwave', btnX + 4, btnY + 2, 24, 24)) {
       CTX.fillStyle = '#fff'; CTX.font = 'bold 13px Arial'; CTX.textAlign = 'center';
       CTX.fillText('下一波 ▶', btnX + btnW/2, btnY + 19);
     } else {
@@ -1590,8 +1607,10 @@ function drawUI() {
 
   // Bottom bar - semi-transparent dark glass effect with top border
   const barY = UI_TOP + H;
-  CTX.fillStyle = 'rgba(20,20,40,0.9)';
-  CTX.fillRect(0, barY, W, UI_BOT);
+  if (!drawImg('hud-bg-bottom', 0, barY, W, UI_BOT)) {
+    CTX.fillStyle = 'rgba(20,20,40,0.9)';
+    CTX.fillRect(0, barY, W, UI_BOT);
+  }
   CTX.strokeStyle = 'rgba(255,255,255,0.4)';
   CTX.lineWidth = 1;
   CTX.beginPath(); CTX.moveTo(0, barY + 0.5); CTX.lineTo(W, barY + 0.5); CTX.stroke();
@@ -1634,10 +1653,12 @@ function drawUI() {
     const panelY = pp.y - 90;
     const def = TOWER_DEFS[selectedPlaced.type];
 
-    CTX.fillStyle = 'rgba(0,0,0,0.85)';
-    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.fill();
-    CTX.strokeStyle = '#888'; CTX.lineWidth = 1;
-    CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.stroke();
+    if (!drawImg('panel-upgrade', panelX, panelY, 130, 80)) {
+      CTX.fillStyle = 'rgba(0,0,0,0.85)';
+      CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.fill();
+      CTX.strokeStyle = '#888'; CTX.lineWidth = 1;
+      CTX.beginPath(); CTX.roundRect(panelX, panelY, 130, 80, 6); CTX.stroke();
+    }
 
     // Info
     CTX.fillStyle = '#fff'; CTX.font = '10px Arial'; CTX.textAlign = 'left';
@@ -1655,16 +1676,20 @@ function drawUI() {
 
     // Upgrade button
     if (!selectedPlaced.mine && selectedPlaced.level < 2) {
-      CTX.fillStyle = gold >= def.upCost ? '#4CAF50' : '#666';
-      CTX.beginPath(); CTX.roundRect(panelX + 3, panelY + 52, 58, 20, 4); CTX.fill();
+      if (!drawImg('btn-upgrade', panelX + 3, panelY + 52, 58, 20)) {
+        CTX.fillStyle = gold >= def.upCost ? '#4CAF50' : '#666';
+        CTX.beginPath(); CTX.roundRect(panelX + 3, panelY + 52, 58, 20, 4); CTX.fill();
+      }
       CTX.fillStyle = '#fff'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
       CTX.fillText('升级' + def.upCost, panelX + 32, panelY + 66);
     }
 
     // Sell button
     const sellVal = Math.floor(selectedPlaced.totalCost * 0.5);
-    CTX.fillStyle = '#f44336';
-    CTX.beginPath(); CTX.roundRect(panelX + 65, panelY + 52, 58, 20, 4); CTX.fill();
+    if (!drawImg('btn-sell', panelX + 65, panelY + 52, 58, 20)) {
+      CTX.fillStyle = '#f44336';
+      CTX.beginPath(); CTX.roundRect(panelX + 65, panelY + 52, 58, 20, 4); CTX.fill();
+    }
     CTX.fillStyle = '#fff'; CTX.font = 'bold 10px Arial'; CTX.textAlign = 'center';
     CTX.fillText('卖' + sellVal, panelX + 94, panelY + 66);
 
@@ -1794,7 +1819,8 @@ function drawMenu() {
   // Title with floating animation
   const titleW = 400, titleH = 200;
   const titleFloat = Math.sin(menuAnimTime * 2) * 8;
-  if (!drawImg('title', W/2 - titleW/2, UI_TOP + 30 + titleFloat, titleW, titleH)) {
+  if (!drawImg('title-v2', W/2 - titleW/2, UI_TOP + 30 + titleFloat, titleW, titleH) &&
+      !drawImg('title', W/2 - titleW/2, UI_TOP + 30 + titleFloat, titleW, titleH)) {
     CTX.textAlign = 'center';
     CTX.font = 'bold 36px Arial';
     CTX.strokeStyle = '#1a5c1a';
@@ -1831,6 +1857,7 @@ function drawMenu() {
   glossGrad.addColorStop(1, 'rgba(255,255,255,0)');
   CTX.fillStyle = glossGrad;
   CTX.beginPath(); CTX.roundRect(btnX + 2, btnY + 2, btnW - 4, btnH/2 - 2, [10, 10, 0, 0]); CTX.fill();
+  drawImg('btn-start-v2', btnX + 10, btnY + 5, btnW - 20, btnH - 10) ||
   drawImg('btn-start', btnX + 10, btnY + 5, btnW - 20, btnH - 10);
   CTX.fillStyle = '#fff'; CTX.font = 'bold 24px Arial'; CTX.textAlign = 'center';
   CTX.fillText('开始游戏', W/2, btnY + 40);
@@ -1847,15 +1874,17 @@ function drawEndScreen(win) {
     const panX = W/2 - panW/2, panY = TOTAL_H/2 - panH/2;
     // Panel shadow
     CTX.shadowColor = 'rgba(255,215,0,0.5)'; CTX.shadowBlur = 30;
-    // Panel gradient background
-    const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
-    panGrad.addColorStop(0, '#2a1a4a');
-    panGrad.addColorStop(1, '#1a1a3a');
-    CTX.fillStyle = panGrad;
-    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 16); CTX.fill();
-    // Gold border
-    CTX.strokeStyle = '#DAA520'; CTX.lineWidth = 2;
-    CTX.beginPath(); CTX.roundRect(panX + 1, panY + 1, panW - 2, panH - 2, 16); CTX.stroke();
+    if (!drawImg('panel-win', panX, panY, panW, panH)) {
+      // Panel gradient background
+      const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
+      panGrad.addColorStop(0, '#2a1a4a');
+      panGrad.addColorStop(1, '#1a1a3a');
+      CTX.fillStyle = panGrad;
+      CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 16); CTX.fill();
+      // Gold border
+      CTX.strokeStyle = '#DAA520'; CTX.lineWidth = 2;
+      CTX.beginPath(); CTX.roundRect(panX + 1, panY + 1, panW - 2, panH - 2, 16); CTX.stroke();
+    }
     CTX.shadowBlur = 0;
     // Inner subtle line
     CTX.strokeStyle = 'rgba(255,215,0,0.2)'; CTX.lineWidth = 1;
@@ -1918,13 +1947,15 @@ function drawEndScreen(win) {
     // Dark gray panel
     const panW = 280, panH = 210;
     const panX = W/2 - panW/2, panY = TOTAL_H/2 - panH/2;
-    const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
-    panGrad.addColorStop(0, '#2a2a2a');
-    panGrad.addColorStop(1, '#1a1a1a');
-    CTX.fillStyle = panGrad;
-    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.fill();
-    CTX.strokeStyle = `rgba(200,0,0,${redAlpha})`; CTX.lineWidth = 2;
-    CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.stroke();
+    if (!drawImg('panel-lose', panX, panY, panW, panH)) {
+      const panGrad = CTX.createLinearGradient(panX, panY, panX, panY + panH);
+      panGrad.addColorStop(0, '#2a2a2a');
+      panGrad.addColorStop(1, '#1a1a1a');
+      CTX.fillStyle = panGrad;
+      CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.fill();
+      CTX.strokeStyle = `rgba(200,0,0,${redAlpha})`; CTX.lineWidth = 2;
+      CTX.beginPath(); CTX.roundRect(panX, panY, panW, panH, 14); CTX.stroke();
+    }
     // Title
     CTX.textAlign = 'center'; CTX.font = 'bold 28px Arial';
     CTX.strokeStyle = '#600'; CTX.lineWidth = 4;

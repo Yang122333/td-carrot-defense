@@ -1,4 +1,5 @@
 # ===== Android AAB Build Script (Unity Project) =====
+# Version: 16
 # Usage: powershell -ExecutionPolicy Bypass -File .\build-aab.ps1
 # Put this script in the same folder as your project .zip file
 
@@ -58,15 +59,20 @@ if ($zipFiles.Count -eq 0) {
 
 $PROJECT_DIR = "$WORKSPACE\project"
 if (Test-Path $PROJECT_DIR) { 
+    Write-Host "    Cleaning old project dir..." -ForegroundColor Gray
     cmd /c "rmdir /s /q `"$PROJECT_DIR`"" 2>$null
+    Start-Sleep -Seconds 1
+    if (Test-Path $PROJECT_DIR) {
+        Remove-Item -Recurse -Force $PROJECT_DIR -ErrorAction SilentlyContinue
+    }
 }
 New-Item -ItemType Directory -Force -Path $PROJECT_DIR | Out-Null
 
 Write-Step "Extracting project..."
-# Use -Force and pipe to Out-Null to suppress any prompts
 $ProgressPreference = 'SilentlyContinue'
 Expand-Archive -Path $zipFile -DestinationPath $PROJECT_DIR -Force *>&1 | Out-Null
 $ProgressPreference = 'Continue'
+Write-Ok "Extracted"
 
 # Navigate into the single subfolder if needed
 $subDirs = Get-ChildItem -Path $PROJECT_DIR -Directory | Where-Object { $_.Name -ne "__MACOSX" }
@@ -503,9 +509,24 @@ $signingBlock = @"
 
 # Insert signingConfigs inside android { } block, right after the opening
 if ($gradleContent -notmatch 'signingConfigs\s*\{[^}]*release') {
-    # Match exactly "android {" at line start, not "androidJunkCode {" etc.
-    $gradleContent = $gradleContent -replace '(?m)(^android\b\s*\{)', "`$1`n$signingBlock"
-    Write-Ok "signingConfigs block added"
+    # Find the exact "android {" line (not androidJunkCode, androidExtensions, etc.)
+    $lines = $gradleContent -split "`n"
+    $insertIdx = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $trimmed = $lines[$i].Trim()
+        if ($trimmed -eq 'android {' -or $trimmed -eq 'android{') {
+            $insertIdx = $i
+            break
+        }
+    }
+    if ($insertIdx -ge 0) {
+        $before = $lines[0..$insertIdx] -join "`n"
+        $after = $lines[($insertIdx+1)..($lines.Count-1)] -join "`n"
+        $gradleContent = $before + "`n" + $signingBlock + "`n" + $after
+        Write-Ok "signingConfigs block added after line $($insertIdx+1)"
+    } else {
+        Write-Err "Could not find 'android {' line in build.gradle"
+    }
 } else {
     Write-Skip "signingConfigs already exists"
 }

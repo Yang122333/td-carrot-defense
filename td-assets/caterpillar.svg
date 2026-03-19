@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20">
+  <defs>
+    <radialGradient id="cater-seg" cx="45%" cy="38%" r="55%">
+      <stop offset="0%" stop-color="#A5D6A7"/>
+      <stop offset="50%" stop-color="#66BB6A"/>
+      <stop offset="100%" stop-color="#388E3C"/>
+    </radialGradient>
+    <radialGradient id="cater-head" cx="42%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#C8E6C9"/>
+      <stop offset="50%" stop-color="#81C784"/>
+      <stop offset="100%" stop-color="#43A047"/>
+    </radialGradient>
+    <radialGradient id="cater-high" cx="40%" cy="30%" r="40%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.5)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <filter id="cater-shadow" x="-15%" y="-15%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="0.8" stdDeviation="0.6" flood-color="#00000033"/>
+    </filter>
+  </defs>
+  <!-- Tiny feet -->
+  <g fill="#43A047" opacity="0.7">
+    <ellipse cx="7" cy="18.5" rx="0.8" ry="1" />
+    <ellipse cx="9" cy="19" rx="0.8" ry="1" />
+    <ellipse cx="14" cy="19" rx="0.8" ry="1" />
+    <ellipse cx="16" cy="18.5" rx="0.8" ry="1" />
+    <ellipse cx="21" cy="19" rx="0.8" ry="1" />
+    <ellipse cx="23" cy="18.5" rx="0.8" ry="1" />
+  </g>
+  <!-- Body segments back to front -->
+  <!-- Segment 5 (tail) -->
+  <ellipse cx="27" cy="13" rx="3.2" ry="3.5" fill="url(#cater-seg)" stroke="#2E7D32" stroke-width="0.5" filter="url(#cater-shadow)"/>
+  <ellipse cx="27" cy="13" rx="3.2" ry="3.5" fill="url(#cater-high)"/>
+  <!-- Segment 4 -->
+  <ellipse cx="22" cy="12" rx="3.5" ry="4" fill="url(#cater-seg)" stroke="#2E7D32" stroke-width="0.5" filter="url(#cater-shadow)"/>
+  <ellipse cx="22" cy="12" rx="3.5" ry="4" fill="url(#cater-high)"/>
+  <!-- Segment 3 -->
+  <ellipse cx="17" cy="11.5" rx="3.5" ry="4.2" fill="url(#cater-seg)" stroke="#2E7D32" stroke-width="0.5" filter="url(#cater-shadow)"/>
+  <ellipse cx="17" cy="11.5" rx="3.5" ry="4.2" fill="url(#cater-high)"/>
+  <!-- Segment 2 -->
+  <ellipse cx="12" cy="11" rx="3.8" ry="4.5" fill="url(#cater-seg)" stroke="#2E7D32" stroke-width="0.5" filter="url(#cater-shadow)"/>
+  <ellipse cx="12" cy="11" rx="3.8" ry="4.5" fill="url(#cater-high)"/>
+  <!-- Head (biggest) -->
+  <ellipse cx="6.5" cy="10" rx="4.5" ry="5" fill="url(#cater-head)" stroke="#2E7D32" stroke-width="0.6" filter="url(#cater-shadow)"/>
+  <ellipse cx="6.5" cy="10" rx="4.5" ry="5" fill="url(#cater-high)"/>
+  <!-- Spring antennae -->
+  <path d="M5 5 Q3 2 2 1" fill="none" stroke="#66BB6A" stroke-width="0.7" stroke-linecap="round"/>
+  <circle cx="1.8" cy="0.8" r="1.2" fill="#FFEB3B" stroke="#F9A825" stroke-width="0.3"/>
+  <path d="M8 5 Q9 2 10.5 1" fill="none" stroke="#66BB6A" stroke-width="0.7" stroke-linecap="round"/>
+  <circle cx="10.7" cy="0.8" r="1.2" fill="#FF7043" stroke="#E64A19" stroke-width="0.3"/>
+  <!-- Big innocent eyes -->
+  <ellipse cx="5" cy="9" rx="2" ry="2.3" fill="white" stroke="#2E7D32" stroke-width="0.4"/>
+  <ellipse cx="8.5" cy="9" rx="2" ry="2.3" fill="white" stroke="#2E7D32" stroke-width="0.4"/>
+  <circle cx="5.3" cy="9.3" r="1.2" fill="#1B5E20"/>
+  <circle cx="8.8" cy="9.3" r="1.2" fill="#1B5E20"/>
+  <!-- Eye highlights -->
+  <circle cx="4.7" cy="8.5" r="0.5" fill="white"/>
+  <circle cx="8.2" cy="8.5" r="0.5" fill="white"/>
+  <!-- Eyelashes -->
+  <line x1="3.5" y1="7" x2="3" y2="6" stroke="#2E7D32" stroke-width="0.3"/>
+  <line x1="5" y1="6.7" x2="5" y2="5.8" stroke="#2E7D32" stroke-width="0.3"/>
+  <line x1="8" y1="6.7" x2="8" y2="5.8" stroke="#2E7D32" stroke-width="0.3"/>
+  <line x1="10" y1="7" x2="10.5" y2="6" stroke="#2E7D32" stroke-width="0.3"/>
+  <!-- Blush cheeks -->
+  <ellipse cx="3" cy="11" rx="1.3" ry="0.7" fill="#F48FB1" opacity="0.4"/>
+  <ellipse cx="10.5" cy="11" rx="1.3" ry="0.7" fill="#F48FB1" opacity="0.4"/>
+  <!-- Cute small mouth -->
+  <path d="M5.5 12.5 Q6.5 13.5 7.5 12.5" fill="none" stroke="#2E7D32" stroke-width="0.5" stroke-linecap="round"/>
+  <!-- Segment belly dots -->
+  <circle cx="12" cy="12.5" r="0.8" fill="#C8E6C9" opacity="0.5"/>
+  <circle cx="17" cy="13" r="0.8" fill="#C8E6C9" opacity="0.5"/>
+  <circle cx="22" cy="13.5" r="0.7" fill="#C8E6C9" opacity="0.5"/>
+  <circle cx="27" cy="14" r="0.6" fill="#C8E6C9" opacity="0.5"/>
+</svg>

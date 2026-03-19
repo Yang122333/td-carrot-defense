@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <defs>
+    <radialGradient id="heart-body" cx="0.4" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#FF6B7A"/>
+      <stop offset="60%" stop-color="#E5243B"/>
+      <stop offset="100%" stop-color="#B01030"/>
+    </radialGradient>
+    <linearGradient id="heart-shine" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="heart-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="0.8" stdDeviation="0.5" flood-color="#800020" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <!-- heart shape -->
+  <path d="M8 14 C3 10 0.5 7 0.5 4.5 C0.5 2.2 2.5 0.5 4.5 0.5 C6 0.5 7.2 1.5 8 2.8 C8.8 1.5 10 0.5 11.5 0.5 C13.5 0.5 15.5 2.2 15.5 4.5 C15.5 7 13 10 8 14Z"
+        fill="url(#heart-body)" filter="url(#heart-shadow)"/>
+  <!-- candy highlight - left lobe -->
+  <ellipse cx="5" cy="4" rx="2.2" ry="1.8" fill="url(#heart-shine)" transform="rotate(-20 5 4)"/>
+  <!-- small specular dot -->
+  <ellipse cx="4.5" cy="3.2" rx="0.8" ry="0.5" fill="white" opacity="0.7" transform="rotate(-15 4.5 3.2)"/>
+  <!-- bottom edge highlight for candy feel -->
+  <path d="M4 11 Q8 13.5 12 11" fill="none" stroke="#FF8A95" stroke-width="0.4" opacity="0.5"/>
+</svg>

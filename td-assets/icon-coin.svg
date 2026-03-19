@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <defs>
+    <linearGradient id="coin-face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE44D"/>
+      <stop offset="50%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#E5A800"/>
+    </linearGradient>
+    <linearGradient id="coin-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D4920A"/>
+      <stop offset="100%" stop-color="#A06800"/>
+    </linearGradient>
+    <linearGradient id="coin-shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.7"/>
+      <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="coin-inner" cx="0.5" cy="0.45" r="0.45">
+      <stop offset="0%" stop-color="#FFEC80"/>
+      <stop offset="100%" stop-color="#D4920A"/>
+    </radialGradient>
+  </defs>
+  <!-- coin edge / thickness -->
+  <ellipse cx="8" cy="9.5" rx="6.5" ry="5.5" fill="url(#coin-edge)"/>
+  <!-- coin face -->
+  <ellipse cx="8" cy="8" rx="6.5" ry="5.5" fill="url(#coin-face)"/>
+  <!-- inner ring -->
+  <ellipse cx="8" cy="8" rx="5" ry="4.2" fill="none" stroke="#D4920A" stroke-width="0.5" opacity="0.6"/>
+  <!-- inner fill -->
+  <ellipse cx="8" cy="8" rx="5" ry="4.2" fill="url(#coin-inner)" opacity="0.3"/>
+  <!-- $ symbol -->
+  <text x="8" y="10" font-family="Arial,sans-serif" font-size="7" font-weight="bold" fill="#B8860B" text-anchor="middle" opacity="0.85">$</text>
+  <!-- shine -->
+  <ellipse cx="8" cy="8" rx="6.5" ry="5.5" fill="url(#coin-shine)"/>
+  <!-- top highlight arc -->
+  <path d="M4 5.5 Q8 3 12 5.5" fill="none" stroke="white" stroke-width="0.6" opacity="0.5"/>
+</svg>

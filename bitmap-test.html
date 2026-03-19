@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>玉米射手 - Royal Match Style</title>
+<style>
+body{margin:0;background:#1a1a2e;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;min-height:100vh;gap:32px;font-family:sans-serif;}
+.wrap{display:flex;flex-direction:column;align-items:center;}
+.label{color:#aaa;text-align:center;font-size:13px;margin-top:6px;}
+canvas{image-rendering:pixelated;}
+</style>
+</head>
+<body>
+<div class="wrap"><canvas id="src" width="256" height="256"></canvas><div class="label">256×256 原始</div></div>
+<div class="wrap"><canvas id="big" width="512" height="512"></canvas><div class="label">512×512 放大</div></div>
+<div class="wrap"><canvas id="sm" width="48" height="48"></canvas><div class="label">48×48 游戏</div></div>
+<script>
+var C=document.getElementById('src'),X=C.getContext('2d'),W=256,H=256;
+function ell(cx,cy,rx,ry){X.beginPath();X.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);}
+function cir(cx,cy,r){X.beginPath();X.arc(cx,cy,r,0,Math.PI*2);}
+function rg(x0,y0,r0,x1,y1,r1,s){var g=X.createRadialGradient(x0,y0,r0,x1,y1,r1);s.forEach(function(a){g.addColorStop(a[0],a[1]);});return g;}
+function lg(x0,y0,x1,y1,s){var g=X.createLinearGradient(x0,y0,x1,y1);s.forEach(function(a){g.addColorStop(a[0],a[1]);});return g;}
+
+// ground shadow
+X.save();
+ell(128,232,54,13);
+X.fillStyle=rg(128,232,0,128,232,54,[[0,'rgba(0,0,0,0.5)'],[1,'rgba(0,0,0,0)']]);
+X.fill();
+X.restore();
+
+// dirt base
+X.save();
+ell(128,222,46,18);
+X.fillStyle=lg(84,204,172,240,[[0,'#a0724e'],[0.45,'#8b5e3c'],[1,'#6b4226']]);
+X.fill();
+ell(128,222,46,18);
+X.strokeStyle='#5a3518';X.lineWidth=1.5;X.stroke();
+ell(116,216,28,7);
+X.fillStyle='rgba(255,220,180,0.18)';X.fill();
+// dirt specks
+X.fillStyle='rgba(90,53,24,0.4)';
+[[110,225,2],[140,228,1.5],[152,222,1.8],[105,220,1.2]].forEach(function(d){cir(d[0],d[1],d[2]);X.fill();});
+X.restore();
+
+// body
+var bx=128,by=148,brx=42,bry=62;
+X.save();
+X.shadowColor='rgba(0,0,0,0.3)';X.shadowBlur=14;X.shadowOffsetX=4;X.shadowOffsetY=6;
+ell(bx,by,brx,bry);
+X.fillStyle=lg(86,86,170,210,[[0,'#ffe066'],[0.35,'#ffd633'],[0.7,'#e6b800'],[1,'#c49000']]);
+X.fill();
+X.shadowColor='transparent';
+// dark right
+ell(bx,by,brx,bry);
+X.fillStyle=lg(86,100,180,200,[[0,'rgba(255,255,255,0)'],[0.5,'rgba(0,0,0,0)'],[1,'rgba(120,70,0,0.3)']]);
+X.fill();
+// left highlight
+ell(bx-12,by-10,brx*0.55,bry*0.7);
+X.fillStyle=rg(bx-22,by-22,0,bx-12,by-10,brx*0.55,[[0,'rgba(255,255,230,0.4)'],[1,'rgba(255,255,230,0)']]);
+X.fill();
+X.restore();
+
+// corn kernels
+X.save();
+X.beginPath();X.ellipse(bx,by,brx-2,bry-2,0,0,Math.PI*2);X.clip();
+for(var row=0;row<9;row++){
+  var t=(row+0.5)/9;
+  var cy=by-bry+14+t*(bry*2-28);
+  var rw=Math.sqrt(Math.max(0,1-Math.pow((cy-by)/bry,2)))*brx;
+  var off=(row%2)*0.5;
+  for(var col=0;col<7;col++){
+    var ct=(col+off+0.5)/7;
+    var cx=bx-rw+6+ct*(rw*2-12);
+    var kr=5.5;
+    cir(cx,cy,kr);
+    X.fillStyle=rg(cx-1.5,cy-1.5,0,cx,cy,kr,[[0,'#ffe680'],[0.5,'#ffd633'],[1,'#cca300']]);
+    X.fill();
+    cir(cx-1.2,cy-1.5,kr*0.42);
+    X.fillStyle='rgba(255,255,240,0.5)';X.fill();
+    cir(cx,cy,kr);
+    X.strokeStyle='rgba(160,120,0,0.22)';X.lineWidth=0.6;X.stroke();
+  }
+}
+X.restore();
+
+// body top rim glow
+X.save();
+X.beginPath();X.ellipse(bx,by,brx,bry,0,0,Math.PI*2);X.clip();
+ell(bx-5,by-bry+15,brx*0.7,18);
+X.fillStyle=rg(bx-5,by-bry+8,0,bx-5,by-bry+15,24,[[0,'rgba(255,255,255,0.25)'],[1,'rgba(255,255,255,0)']]);
+X.fill();
+X.restore();
+
+// body outline
+ell(bx,by,brx,bry);
+X.strokeStyle='rgba(140,90,0,0.35)';X.lineWidth=1.8;X.stroke();
+
+// left arm
+X.save();
+X.strokeStyle='#c49000';X.lineWidth=5;X.lineCap='round';
+X.beginPath();X.moveTo(90,155);X.quadraticCurveTo(68,158,60,148);X.stroke();
+// hand
+cir(58,146,7);
+X.fillStyle=lg(52,140,64,152,[[0,'#ffe066'],[0.5,'#ffd633'],[1,'#cca300']]);
+X.fill();
+cir(58,146,7);X.strokeStyle='rgba(140,90,0,0.3)';X.lineWidth=1;X.stroke();
+// fingers
+X.strokeStyle='#e6b800';X.lineWidth=3;X.lineCap='round';
+X.beginPath();X.moveTo(54,141);X.lineTo(50,136);X.stroke();
+X.beginPath();X.moveTo(57,140);X.lineTo(55,134);X.stroke();
+X.beginPath();X.moveTo(60,141);X.lineTo(60,135);X.stroke();
+X.restore();
+
+// right arm + ammo
+X.save();
+X.strokeStyle='#c49000';X.lineWidth=5;X.lineCap='round';
+X.beginPath();X.moveTo(166,155);X.quadraticCurveTo(190,152,196,140);X.stroke();
+// hand
+cir(198,138,7);
+X.fillStyle=lg(192,132,204,144,[[0,'#ffe066'],[0.5,'#ffd633'],[1,'#cca300']]);
+X.fill();
+cir(198,138,7);X.strokeStyle='rgba(140,90,0,0.3)';X.lineWidth=1;X.stroke();
+// ammo glow
+X.save();
+cir(198,126,12);
+X.fillStyle=rg(198,126,0,198,126,12,[[0,'rgba(255,230,100,0.5)'],[1,'rgba(255,200,0,0)']]);
+X.fill();
+X.restore();
+// ammo kernel
+cir(198,126,6);
+X.fillStyle=rg(196,123,0,198,126,6,[[0,'#fff4b0'],[0.4,'#ffd633'],[1,'#b8860b']]);
+X.fill();
+cir(198,126,6);X.strokeStyle='rgba(180,130,0,0.4)';X.lineWidth=1;X.stroke();
+// ammo specular
+cir(196,123,2.2);
+X.fillStyle='rgba(255,255,255,0.7)';X.fill();
+X.restore();
+
+// beret
+X.save();
+X.beginPath();
+X.moveTo(88,98);
+X.bezierCurveTo(88,66,130,50,150,58);
+X.bezierCurveTo(172,66,176,84,170,98);
+X.bezierCurveTo(158,103,98,105,88,98);
+X.closePath();
+X.fillStyle=lg(88,52,172,100,[[0,'#4caf50'],[0.4,'#388e3c'],[1,'#1b5e20']]);
+X.fill();
+X.strokeStyle='#145214';X.lineWidth=1.5;X.stroke();
+// beret highlight
+X.beginPath();
+X.moveTo(100,86);
+X.bezierCurveTo(106,70,138,60,148,68);
+X.bezierCurveTo(152,74,148,84,140,88);
+X.bezierCurveTo(124,90,108,92,100,86);
+X.closePath();
+X.fillStyle='rgba(180,255,180,0.2)';X.fill();
+// band
+X.beginPath();
+X.moveTo(90,98);
+X.bezierCurveTo(100,105,160,106,168,98);
+X.bezierCurveTo(164,110,94,112,90,98);
+X.closePath();
+X.fillStyle='#2e7d32';X.fill();
+// nub
+cir(132,60,4);X.fillStyle='#4caf50';X.fill();
+cir(131,58.5,1.8);X.fillStyle='rgba(200,255,200,0.45)';X.fill();
+X.restore();
+
+// eyes
+function drawEye(cx,cy){
+  X.save();
+  ell(cx,cy,14,16);
+  X.fillStyle='#fff';
+  X.shadowColor='rgba(0,0,0,0.15)';X.shadowBlur=3;
+  X.fill();X.shadowColor='transparent';
+  ell(cx,cy,14,16);X.strokeStyle='rgba(80,50,0,0.3)';X.lineWidth=1.2;X.stroke();
+  // iris
+  cir(cx+1,cy+1,9);
+  X.fillStyle=rg(cx-1,cy-2,0,cx+1,cy+1,9,[[0,'#8d6e3f'],[0.6,'#6d4c2a'],[1,'#3e2a14']]);
+  X.fill();
+  // pupil
+  cir(cx+1,cy+2,5);X.fillStyle='#1a1008';X.fill();
+  // highlight 1
+  cir(cx-3,cy-4,3);X.fillStyle='rgba(255,255,255,0.9)';X.fill();
+  // highlight 2
+  cir(cx+3,cy+2,1.5);X.fillStyle='rgba(255,255,255,0.6)';X.fill();
+  X.restore();
+}
+drawEye(112,128);
+drawEye(146,128);
+
+// eyebrows
+X.save();
+X.strokeStyle='#6b4226';X.lineWidth=2.5;X.lineCap='round';
+X.beginPath();X.moveTo(100,112);X.quadraticCurveTo(112,106,124,112);X.stroke();
+X.beginPath();X.moveTo(134,112);X.quadraticCurveTo(146,106,158,112);X.stroke();
+X.restore();
+
+// blush
+X.save();
+ell(96,144,10,6);
+X.fillStyle=rg(96,144,0,96,144,10,[[0,'rgba(255,130,150,0.35)'],[1,'rgba(255,130,150,0)']]);
+X.fill();
+ell(160,144,10,6);
+X.fillStyle=rg(160,144,0,160,144,10,[[0,'rgba(255,130,150,0.35)'],[1,'rgba(255,130,150,0)']]);
+X.fill();
+X.restore();
+
+// mouth
+X.save();
+X.beginPath();
+X.moveTo(116,154);
+X.quadraticCurveTo(128,170,140,154);
+X.closePath();
+X.fillStyle='#c0392b';X.fill();
+X.strokeStyle='#8b1a1a';X.lineWidth=1;X.stroke();
+// teeth
+X.fillStyle='#fff';
+X.fillRect(121,154,5,5);
+X.fillRect(127,154,5,5);
+X.fillRect(133,154,4,4);
+// tongue hint
+X.beginPath();
+X.moveTo(122,162);X.quadraticCurveTo(128,168,134,162);
+X.fillStyle='#e57373';X.fill();
+X.restore();
+
+// nose
+X.save();
+ell(128,142,3,2.5);
+X.fillStyle='rgba(180,120,40,0.3)';X.fill();
+X.restore();
+
+// global specular overlay
+X.save();
+X.globalCompositeOperation='overlay';
+ell(bx-8,by-20,brx*0.4,bry*0.5);
+X.fillStyle=rg(bx-14,by-35,0,bx-8,by-20,bry*0.5,[[0,'rgba(255,255,255,0.15)'],[1,'rgba(255,255,255,0)']]);
+X.fill();
+X.restore();
+
+// rim light right edge
+X.save();
+X.globalCompositeOperation='screen';
+X.beginPath();X.ellipse(bx,by,brx,bry,0,0,Math.PI*2);X.clip();
+ell(bx+brx-6,by,8,bry*0.7);
+X.fillStyle=rg(bx+brx-4,by,0,bx+brx-6,by,10,[[0,'rgba(255,240,200,0.25)'],[1,'rgba(255,240,200,0)']]);
+X.fill();
+X.restore();
+
+// copy to other canvases
+var big=document.getElementById('big').getContext('2d');
+big.imageSmoothingEnabled=false;
+big.drawImage(C,0,0,512,512);
+var sm=document.getElementById('sm').getContext('2d');
+sm.imageSmoothingEnabled=true;
+sm.imageSmoothingQuality='high';
+sm.drawImage(C,0,0,48,48);
+</script>
+</body>
+</html>

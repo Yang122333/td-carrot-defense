@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+  <defs>
+    <radialGradient id="bice-grad" cx="42%" cy="38%" r="55%">
+      <stop offset="0%" stop-color="#E3F2FD" stop-opacity="0.9"/>
+      <stop offset="40%" stop-color="#90CAF9" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#1E88E5" stop-opacity="0.7"/>
+    </radialGradient>
+    <filter id="bice-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="0.6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Hexagonal ice crystal -->
+  <polygon points="4,0.8 7,2.4 7,5.6 4,7.2 1,5.6 1,2.4" fill="url(#bice-grad)" stroke="#1565C0" stroke-width="0.3" filter="url(#bice-glow)"/>
+  <!-- Inner hex facet -->
+  <polygon points="4,2 5.8,3 5.8,5 4,6 2.2,5 2.2,3" fill="white" opacity="0.15"/>
+  <!-- Refraction lines -->
+  <line x1="4" y1="0.8" x2="4" y2="7.2" stroke="#BBDEFB" stroke-width="0.2" opacity="0.5"/>
+  <line x1="1" y1="2.4" x2="7" y2="5.6" stroke="#BBDEFB" stroke-width="0.2" opacity="0.4"/>
+  <line x1="7" y1="2.4" x2="1" y2="5.6" stroke="#BBDEFB" stroke-width="0.2" opacity="0.4"/>
+  <!-- Center highlight -->
+  <circle cx="3.5" cy="3.2" r="0.8" fill="white" opacity="0.5"/>
+</svg>

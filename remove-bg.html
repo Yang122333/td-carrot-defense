@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>去白底工具</title></head>
+<body>
+<script>
+const files = [
+  'corn-lv1','corn-lv2','icepea-lv1','icepea-lv2','chili-lv1','chili-lv2','mushroom',
+  'caterpillar','ant','beetle','bugking','carrot','entrance',
+  'bullet-corn','bullet-ice','bullet-fire',
+  'btn-start','btn-nextwave','icon-coin','icon-heart','title'
+];
+let done = 0;
+files.forEach(name => {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, c.width, c.height);
+    const d = data.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r=d[i], g=d[i+1], b=d[i+2];
+      // 白色及接近白色的像素变透明
+      if (r > 230 && g > 230 && b > 230) {
+        const whiteness = (r + g + b) / 3;
+        d[i+3] = Math.max(0, Math.floor((255 - whiteness) * 8));
+      }
+      // 浅灰也半透明
+      else if (r > 200 && g > 200 && b > 200) {
+        const whiteness = (r + g + b) / 3;
+        d[i+3] = Math.max(30, Math.floor((255 - whiteness) * 4));
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    // 输出为 PNG data URL
+    const link = document.createElement('a');
+    link.download = name + '.png';
+    link.href = c.toDataURL('image/png');
+    link.click();
+    done++;
+    document.title = done + '/' + files.length + ' done';
+  };
+  img.src = 'td-assets-v3/' + name + '.png';
+});
+</script>
+</body></html>

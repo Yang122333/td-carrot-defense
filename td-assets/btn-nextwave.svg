@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30" viewBox="0 0 80 30">
+  <defs>
+    <linearGradient id="btnnext-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFA726"/>
+      <stop offset="50%" stop-color="#FB8C00"/>
+      <stop offset="100%" stop-color="#E65100"/>
+    </linearGradient>
+    <linearGradient id="btnnext-top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <linearGradient id="btnnext-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD54F"/>
+      <stop offset="50%" stop-color="#FFC107"/>
+      <stop offset="100%" stop-color="#FF8F00"/>
+    </linearGradient>
+    <filter id="btnnext-shadow" x="-5%" y="-5%" width="110%" height="135%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.2" flood-color="#BF360C88"/>
+    </filter>
+    <filter id="btnnext-textshadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.6" flood-color="#BF360CAA"/>
+    </filter>
+  </defs>
+  <!-- Shadow base -->
+  <rect x="3" y="5" width="74" height="23" rx="7" fill="#BF360C" opacity="0.35"/>
+  <!-- Gold border -->
+  <rect x="2" y="2" width="76" height="24" rx="8" fill="none" stroke="url(#btnnext-gold)" stroke-width="1.5"/>
+  <!-- Main button -->
+  <rect x="3" y="3" width="74" height="22" rx="7" fill="url(#btnnext-bg)" filter="url(#btnnext-shadow)"/>
+  <!-- Top highlight -->
+  <rect x="6" y="4" width="68" height="9" rx="6" fill="url(#btnnext-top)"/>
+  <!-- Inner border -->
+  <rect x="4" y="4" width="72" height="20" rx="6.5" fill="none" stroke="#FFD54F" stroke-width="0.4" opacity="0.35"/>
+  <!-- Text: 下一波 -->
+  <text x="40" y="19" text-anchor="middle" font-size="11" fill="white" font-weight="bold" font-family="Arial, sans-serif" filter="url(#btnnext-textshadow)">下一波</text>
+  <text x="40" y="18.5" text-anchor="middle" font-size="11" fill="white" font-weight="bold" font-family="Arial, sans-serif" opacity="0.9">下一波</text>
+</svg>
