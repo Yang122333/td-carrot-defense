@@ -169,8 +169,7 @@ if (-not $appModule) {
 if (-not $appModule) {
     Write-Err "Cannot find application module. Directory contents:"
     Get-ChildItem $PROJECT_DIR | ForEach-Object { Write-Host "  $_" }
-    Read-Host "Press Enter to exit"
-    exit 1
+    throw "Cannot find application module"
 }
 Write-Ok "App module: $appModule"
 
@@ -219,6 +218,17 @@ try {
         if ($existingMajor -ge $jdkVersion) {
             Write-Skip "JDK $existingMajor found (need >= $jdkVersion)"
             $javaOk = $true
+            # Make sure JAVA_HOME is set
+            if (-not $env:JAVA_HOME) {
+                try {
+                    $javaPath = (cmd /c "where java 2>&1") | Select-Object -First 1
+                    if ($javaPath -and (Test-Path $javaPath)) {
+                        $env:JAVA_HOME = (Split-Path (Split-Path $javaPath))
+                    }
+                } catch {}
+            }
+            # Also ensure keytool is on PATH
+            $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
         } else {
             Write-Host "    JDK $existingMajor found but need >= $jdkVersion" -ForegroundColor Yellow
         }
@@ -399,8 +409,7 @@ if (-not [string]::IsNullOrEmpty($org)) { $dname += ", O=$org" }
 
     if (-not (Test-Path $keystorePath)) {
         Write-Err "Failed to create keystore"
-        Read-Host "Press Enter to exit"
-        exit 1
+        throw "Failed to create keystore"
     }
     Write-Ok "Keystore created: $keystorePath"
 
@@ -516,8 +525,7 @@ if ($buildExitCode -ne 0) {
     Write-Host "  - Missing SDK component: check compileSdk/buildTools versions"
     Write-Host "  - Memory error: increase org.gradle.jvmargs in gradle.properties"
     Write-Host "  - NDK error: install NDK via sdkmanager"
-    Read-Host "Press Enter to exit"
-    exit 1
+    throw "Build failed"
 }
 
 # ===== 13. Find and copy AAB =====
@@ -543,7 +551,6 @@ Write-Host "Log saved to: $LOG_FILE" -ForegroundColor Gray
     Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
     Write-Host "`nLog saved to: $LOG_FILE" -ForegroundColor Yellow
     Stop-Transcript | Out-Null
-    Read-Host "Press Enter to exit"
     exit 1
 }
 
