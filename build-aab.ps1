@@ -21,21 +21,23 @@ try {
 
 # ===== 1. Find and extract project zip =====
 Write-Step "Finding project zip..."
-$zipFiles = Get-ChildItem -Path $SCRIPT_DIR -Filter "*.zip" | Where-Object { $_.Name -ne "jdk.zip" -and $_.Name -ne "cmdline-tools.zip" }
+$zipFiles = Get-ChildItem -Path $SCRIPT_DIR -Filter "*.zip" -File | Where-Object { $_.Name -ne "jdk.zip" -and $_.Name -ne "cmdline-tools.zip" }
 if ($zipFiles.Count -eq 0) {
     Write-Err "No zip file found. Put your project zip in the same folder as this script."
-    Read-Host "Press Enter to exit"
-    exit 1
+    throw "No zip file found"
 } elseif ($zipFiles.Count -eq 1) {
     $zipFile = $zipFiles[0].FullName
     Write-Ok "Found: $($zipFiles[0].Name)"
 } else {
-    Write-Host "Multiple zip files found:" -ForegroundColor Yellow
-    for ($i = 0; $i -lt $zipFiles.Count; $i++) {
-        Write-Host "  [$i] $($zipFiles[$i].Name)"
+    # Auto-select the largest zip (project zip is usually the biggest)
+    $largest = $zipFiles | Sort-Object Length -Descending | Select-Object -First 1
+    Write-Host "    Multiple zip files found, auto-selecting largest:" -ForegroundColor Yellow
+    foreach ($z in $zipFiles) {
+        $mark = if ($z.Name -eq $largest.Name) { " <--" } else { "" }
+        Write-Host "      $($z.Name) ($([math]::Round($z.Length / 1MB, 1)) MB)$mark"
     }
-    $sel = Read-Host "Select file number"
-    $zipFile = $zipFiles[$sel].FullName
+    $zipFile = $largest.FullName
+    Write-Ok "Selected: $($largest.Name)"
 }
 
 $PROJECT_DIR = "$WORKSPACE\project"
