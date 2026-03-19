@@ -2,10 +2,25 @@
 # Usage: powershell -ExecutionPolicy Bypass -File .\build-aab.ps1
 # Put this script in the same folder as your project .zip file
 
-$ErrorActionPreference = "Stop"
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $WORKSPACE = "$SCRIPT_DIR\android-build"
 $TOOLS_DIR = "$WORKSPACE\_tools"
+$LOG_FILE = "$SCRIPT_DIR\build-log.txt"
+
+# Log everything to file
+Start-Transcript -Path $LOG_FILE -Force
+
+# Catch all errors so window doesn't close
+trap {
+    Write-Host "`n!!! ERROR: $_" -ForegroundColor Red
+    Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
+    Write-Host "`nFull log saved to: $LOG_FILE" -ForegroundColor Yellow
+    Stop-Transcript
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+$ErrorActionPreference = "Stop"
 
 function Write-Step($msg) { Write-Host "`n>>> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    [OK] $msg" -ForegroundColor Green }
@@ -220,17 +235,15 @@ if (-not $javaOk) {
     New-Item -ItemType Directory -Force -Path $TOOLS_DIR | Out-Null
 
     $jdkUrls = @{
-        11 = "https://download.oracle.com/java/11/archive/jdk-11.0.24_windows-x64_bin.zip"
-        17 = "https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.zip"
-        18 = "https://download.oracle.com/java/18/archive/jdk-18.0.2.1_windows-x64_bin.zip"
-        21 = "https://download.oracle.com/java/21/latest/jdk-21_windows-x64_bin.zip"
+        17 = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.12_7.zip"
+        21 = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jdk_x64_windows_hotspot_21.0.4_7.zip"
     }
 
-    # For JDK 11, Oracle requires login. Use Adoptium instead.
-    if ($jdkVersion -le 11) {
-        $jdkUrl = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.12_7.zip"
+    # JDK 11 project can use JDK 17 (backward compatible with Gradle 8.7)
+    if ($jdkVersion -le 17) {
+        $jdkUrl = $jdkUrls[17]
         $jdkVersion = 17
-        Write-Host "    JDK 11 requested but using JDK 17 (backward compatible)" -ForegroundColor Yellow
+        Write-Host "    Using Adoptium JDK 17 (free, no login required)" -ForegroundColor Yellow
     } elseif ($jdkUrls.ContainsKey($jdkVersion)) {
         $jdkUrl = $jdkUrls[$jdkVersion]
     } else {
@@ -475,4 +488,6 @@ if ($aabFiles.Count -gt 0) {
 }
 
 Write-Host "`n===== DONE =====" -ForegroundColor Green
+Write-Host "Log saved to: $LOG_FILE" -ForegroundColor Gray
+Stop-Transcript
 Read-Host "Press Enter to exit"
